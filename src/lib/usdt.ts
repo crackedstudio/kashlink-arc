@@ -25,7 +25,7 @@ export const USDT_DOMAIN_NAME = 'USDT0'
  * Service fee, charged in USDT so nobody ever needs POL.
  *
  * It is added on top at funding, so the recipient always gets the round number the sender chose, and
- * it is only taken when a link is actually claimed — an unclaimed link returns in full, fee included.
+ * it is taken when the link is resolved, whether claimed or reverted (see `payoutFromLink` in usdt-links.ts).
  * The floor exists because 1% of a small link is less than the gas it costs to move.
  */
 export const FEE_BPS = 100n // 1%

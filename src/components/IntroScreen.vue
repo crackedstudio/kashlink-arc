@@ -99,6 +99,9 @@ const steps = [
     <button class="btn btn-primary" @click="emit('next')">
       Create KashLink
     </button>
+    <p class="legal muted">
+      By using KashLink you agree to the <a href="/terms" target="_blank" rel="noopener">Terms and Conditions</a>.
+    </p>
   </main>
 </template>
 
@@ -193,6 +196,16 @@ const steps = [
   justify-content: center;
   gap: 6px;
   margin-bottom: 4px;
+}
+
+.legal {
+  margin-top: 12px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.legal a {
+  text-decoration: underline;
 }
 
 .expired-nudge {
