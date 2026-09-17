@@ -69,6 +69,28 @@ export async function fees(): Promise<{ maxFeePerGas: bigint, maxPriorityFeePerG
   return { maxFeePerGas, maxPriorityFeePerGas: PRIORITY_FEE }
 }
 
+/**
+ * Whether Circle's Gas Station pays the passkey wallet's gas. On by default on testnet; on mainnet
+ * only once a paymaster policy exists in the Console and `VITE_CIRCLE_SPONSOR_GAS=true` is set.
+ * Lives here rather than in passkey.ts so screens can read it without loading the SDK.
+ */
+export const PASSKEY_GAS_SPONSORED = import.meta.env.VITE_CIRCLE_SPONSOR_GAS ? import.meta.env.VITE_CIRCLE_SPONSOR_GAS === 'true' : !IS_MAINNET
+
+/**
+ * How much native USDC to keep back for the sender's own transaction fee, so a "Max" never leaves
+ * the wallet short. A browser wallet's `create` uses ~210k gas; 300k is generous. A passkey wallet
+ * is different: sponsored, it pays nothing; unsponsored, the bundler wants a *prefund* for the whole
+ * gas limit of the user operation before it runs — about 0.16 USDC for the first one, which also
+ * deploys the account — and refunds what is unused afterwards. The reserve is that prefund.
+ */
+const GAS_LIMIT = { wallet: 300_000n, passkey: 8_000_000n } as const
+
+export async function gasReserve(kind: keyof typeof GAS_LIMIT): Promise<bigint> {
+  if (kind === 'passkey' && PASSKEY_GAS_SPONSORED) return 0n
+  const { maxFeePerGas } = await fees()
+  return GAS_LIMIT[kind] * maxFeePerGas
+}
+
 export function txUrl(hash: string): string {
   return `${EXPLORER_URL}/tx/${hash}`
 }

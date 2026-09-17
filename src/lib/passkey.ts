@@ -7,7 +7,7 @@ import {
 } from '@circle-fin/modular-wallets-core'
 import { createPublicClient, encodeFunctionData, type Hex } from 'viem'
 import { createBundlerClient, type P256Credential, type SmartAccount, toWebAuthnAccount } from 'viem/account-abstraction'
-import { CHAIN, IS_MAINNET } from './arc'
+import { CHAIN, IS_MAINNET, PASSKEY_GAS_SPONSORED as SPONSORED } from './arc'
 import { CREDENTIAL_KEY, forgetCachedWallet, rememberAddress } from './passkey-cache'
 import { ERC20_ABI, formatAmount, isNative, type Token, USDC } from './tokens'
 import type { Call, Connected } from './wallet'
@@ -35,8 +35,6 @@ import type { Call, Connected } from './wallet'
 const CLIENT_KEY = import.meta.env.VITE_CIRCLE_CLIENT_KEY ?? ''
 const CLIENT_URL = import.meta.env.VITE_CIRCLE_CLIENT_URL || 'https://modular-sdk.circle.com/v1/rpc/w3s/buidl'
 export const PASSKEYS_ENABLED = !!CLIENT_KEY
-export const SPONSORED = import.meta.env.VITE_CIRCLE_SPONSOR_GAS ? import.meta.env.VITE_CIRCLE_SPONSOR_GAS === 'true' : !IS_MAINNET
-
 
 export interface PasskeyWallet {
   address: Hex

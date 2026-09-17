@@ -39,8 +39,9 @@ const error = ref<string | null>(null)
 const connecting = ref(false)
 /** Shown when the recipient would rather paste an address than connect a wallet. */
 const manual = ref(false)
-/** Set when the payout went to the passkey wallet. */
+/** Set when the payout went to the passkey wallet, and whether that wallet was made just now. */
 const toPasskey = ref(false)
+const newWallet = ref(false)
 /** A passkey wallet already lives on this device; claim into it rather than making a second one. */
 const hasPasskey = hasSavedPasskey()
 const creating = ref(false)
@@ -153,22 +154,22 @@ async function claimWithWallet() {
  * only an address until its first outgoing transaction, which the claimed USDC can pay for. The SDK
  * is loaded on demand — it is a third of the bundle and most people never need it.
  */
-async function claimToPasskeyWallet() {
+async function claimToPasskeyWallet(existing = hasPasskey) {
   creating.value = true
   error.value = null
   try {
     const { createPasskeyWallet, openPasskeyWallet } = await import('../lib/passkey')
-    const wallet = hasPasskey ? await openPasskeyWallet() : await createPasskeyWallet()
+    // `existing` with nothing saved on this device brings up the platform's passkey picker.
+    const wallet = existing ? await openPasskeyWallet() : await createPasskeyWallet()
     to.value = wallet.address
     toPasskey.value = true
+    newWallet.value = !existing
   }
   catch (e) {
     const text = String((e as Error).name) + ' ' + String((e as { details?: string }).details ?? (e as Error).message)
     error.value = /NotAllowed|abort|cancel/i.test(text)
       ? 'Passkey setup was cancelled.'
-      : /entity config|SecurityError|domain/i.test(text)
-        ? 'Passkey wallets are not set up for this site yet.'
-        : errorMessage(e)
+      : errorMessage(e)
     return
   }
   finally {
@@ -236,7 +237,7 @@ async function claim() {
         take it back, and send a new one.
       </p>
       <p v-else-if="state === 'success' && toPasskey" class="status muted">
-        {{ amount }} in {{ token?.symbol }} is in your {{ hasPasskey ? '' : 'new ' }}KashLink wallet, <CopyAddress :address="to.trim()" />.
+        {{ amount }} in {{ token?.symbol }} is in your {{ newWallet ? 'new ' : '' }}KashLink wallet, <CopyAddress :address="to.trim()" />.
         Your passkey controls it; open it any time from the home screen.
       </p>
       <p v-else-if="state === 'success'" class="status muted">
@@ -282,6 +283,34 @@ async function claim() {
           Claim {{ amount }}
         </template>
       </button>
+      <template v-else-if="PASSKEYS">
+        <!-- The passkey wallet is the front door: no extension, no app, one biometric prompt. -->
+        <button class="btn btn-primary" :disabled="creating || connecting || state === 'claiming'" @click="claimToPasskeyWallet()">
+          <template v-if="state === 'claiming'">
+            <span class="spinner" /> Claiming…
+          </template>
+          <template v-else-if="creating">
+            <span class="spinner" /> {{ hasPasskey ? 'Opening your wallet…' : 'Setting up your passkey…' }}
+          </template>
+          <template v-else>
+            <Icon name="fingerprint" :size="20" /> {{ hasPasskey ? `Claim to your KashLink wallet` : `Create a wallet & claim ${amount}` }}
+          </template>
+        </button>
+        <p v-if="!hasPasskey && state !== 'claiming'" class="hint muted center tight">
+          Face ID, Touch ID or your device PIN. Nothing to install.
+        </p>
+        <button v-if="!hasPasskey" class="link-btn have-one" :disabled="creating || connecting || state === 'claiming'" @click="claimToPasskeyWallet(true)">
+          Already have a wallet? Claim with your passkey
+        </button>
+        <button class="btn btn-outline" :disabled="creating || connecting || state === 'claiming'" @click="claimWithWallet">
+          <template v-if="connecting">
+            <span class="spinner" /> Connecting…
+          </template>
+          <template v-else>
+            <Icon name="wallet" :size="20" /> Claim to a browser wallet
+          </template>
+        </button>
+      </template>
       <button v-else class="btn btn-primary" :disabled="connecting || state === 'claiming'" @click="claimWithWallet">
         <template v-if="state === 'claiming'">
           <span class="spinner" /> Claiming…
@@ -291,14 +320,6 @@ async function claim() {
         </template>
         <template v-else>
           <Icon name="wallet" :size="20" /> Connect wallet & claim {{ amount }}
-        </template>
-      </button>
-      <button v-if="PASSKEYS && !manual" class="btn btn-outline" :disabled="creating || state === 'claiming'" @click="claimToPasskeyWallet">
-        <template v-if="creating">
-          <span class="spinner" /> {{ hasPasskey ? 'Opening your wallet…' : 'Setting up your passkey…' }}
-        </template>
-        <template v-else>
-          {{ hasPasskey ? `Claim to your KashLink wallet` : 'No wallet? Create one with a passkey' }}
         </template>
       </button>
       <button class="link-btn switch" :disabled="state === 'claiming' || creating" @click="manual = !manual; error = null">
@@ -455,6 +476,23 @@ async function claim() {
 
 .hint.center {
   text-align: center;
+}
+
+.hint.tight {
+  margin: 8px 0 10px;
+  font-size: 12px;
+}
+
+.hint.tight + .btn {
+  margin-top: 0;
+}
+
+.have-one {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  margin: -4px 0 10px;
+  font-size: 13px;
 }
 
 .switch {

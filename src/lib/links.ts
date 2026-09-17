@@ -226,6 +226,59 @@ export function quoteWith(params: FeeParams, token: Token, amountEach: bigint, p
   return { token, amountEach, people, mode: kind, slots, links, total, fee, tokenTotal, stipend: params.stipend, value: isNative(token) ? tokenTotal + stipends : stipends }
 }
 
+/** The keypad's precision: whole cents. `maxAmountEach` rounds down to this. */
+const CENT = { USDC: 10n ** 16n, EURC: 10n ** 4n } as const
+
+/**
+ * The most a sender can put in each slot, given what the wallet holds. It accounts for the fee,
+ * the stipends and `gasReserve` — the sender's own transaction fee — so that "Max" is a total that
+ * actually goes through. Whole cents only, so the amount reads like the keypad wrote it. Zero when
+ * the wallet cannot fund even a cent.
+ *
+ * `balance` is the link's token; `usdcBalance` the native USDC that pays stipends and gas. For a
+ * USDC link they are the same figure.
+ */
+export function maxAmountEach(params: FeeParams, token: Token, slots: number, balance: bigint, usdcBalance: bigint, gasReserve: bigint, mode: LinkMode = 'separate'): bigint {
+  const n = BigInt(slots)
+  const stipends = params.stipend * n
+  const cent = CENT[token.symbol]
+  const toCents = (x: bigint) => (x < 0n ? 0n : x - (x % cent))
+  // The escrow's tokenTotal is total × (1 + bps/10000), or total + feeMin when that is larger.
+  // Solve for total under the proportional fee, then the floor is checked below.
+  let budget: bigint
+  if (isNative(token)) {
+    budget = usdcBalance - stipends - gasReserve
+  }
+  else {
+    // Gas and stipends come out of USDC; the token budget is the whole balance.
+    if (usdcBalance < stipends + gasReserve) return 0n
+    budget = balance
+  }
+  if (budget <= 0n) return 0n
+  let each = toCents((budget * 10_000n) / (10_000n + params.feeBps) / n)
+  // Integer division can land a cent high, and the fee floor can bite: step down until it fits.
+  while (each > 0n) {
+    const q = quoteWith(params, token, each, slots, mode)
+    const fits = isNative(token) ? q.value + gasReserve <= usdcBalance : q.tokenTotal <= balance
+    if (fits) break
+    each -= cent
+  }
+  return each
+}
+
+/** Why a quote cannot be paid from these balances, or null when it can. */
+export function shortfall(quote: Quote, balance: bigint, usdcBalance: bigint, gasReserve: bigint): { token: Token, have: bigint, need: bigint, reason: 'amount' | 'gas' } | null {
+  const { token } = quote
+  if (isNative(token)) {
+    const need = quote.value + gasReserve
+    return need > usdcBalance ? { token, have: usdcBalance, need, reason: 'amount' } : null
+  }
+  if (quote.tokenTotal > balance) return { token, have: balance, need: quote.tokenTotal, reason: 'amount' }
+  const need = quote.value + gasReserve
+  if (need > usdcBalance) return { token: tokenByAddress(NATIVE), have: usdcBalance, need, reason: 'gas' }
+  return null
+}
+
 /** Native balance of the link address: the stipends, or what is left of them. */
 export function linkGasBalance(id: Hex): Promise<bigint> {
   return rpc.getBalance({ address: id })
