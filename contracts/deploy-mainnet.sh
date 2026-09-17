@@ -59,13 +59,24 @@ bold "Deployed at $ADDRESS in block $BLOCK"
 
 # 3. Verify (Blockscout can take a minute to index; retry a few times)
 ARGS=$(cast abi-encode "constructor(address,address,uint16,uint96)" "$DEPLOYER" "$TREASURY" "$FEE_BPS" "$FEE_MIN")
-for attempt in 1 2 3 4 5; do
+VERIFIED=no
+for attempt in 1 2 3; do
   if forge verify-contract "$ADDRESS" src/KashLinkEscrow.sol:KashLinkEscrow --chain "$CHAIN_ID" \
        --verifier blockscout --verifier-url "$EXPLORER/api/" --constructor-args "$ARGS" --watch; then
+    VERIFIED=yes
     break
   fi
   echo "verification attempt $attempt failed; retrying in 20 s…"; sleep 20
 done
+if [ "$VERIFIED" = no ]; then
+  # explorer.arc.io sits behind a Cloudflare challenge that blocks non-browser clients. Verify from the
+  # explorer's own form instead: Contract → Verify & publish → "Solidity (Standard JSON input)".
+  forge verify-contract "$ADDRESS" src/KashLinkEscrow.sol:KashLinkEscrow --chain "$CHAIN_ID" \
+    --show-standard-json-input > verify-input.json
+  bold "Automatic verification was blocked. Verify manually at $EXPLORER/address/$ADDRESS?tab=contract"
+  echo "  upload contracts/verify-input.json (standard JSON input), compiler 0.8.30, EVM osaka,"
+  echo "  constructor args: $ARGS"
+fi
 
 # 4. Record
 cat >> deployments.md <<EOF
@@ -74,7 +85,7 @@ cat >> deployments.md <<EOF
 
 | | |
 |---|---|
-| KashLinkEscrow | [\`$ADDRESS\`]($EXPLORER/address/$ADDRESS) — source verified |
+| KashLinkEscrow | [\`$ADDRESS\`]($EXPLORER/address/$ADDRESS) — $( [ "$VERIFIED" = yes ] && echo "source verified" || echo "verification pending (manual)" ) |
 | Deploy tx | [\`${TX:0:10}…${TX: -4}\`]($EXPLORER/tx/$TX), block $BLOCK |
 | Owner / treasury | \`$DEPLOYER\` |
 | Fees | $FEE_BPS bps, floor $FEE_MIN |

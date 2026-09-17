@@ -36,3 +36,4 @@ contracts/out/
 contracts/cache/
 contracts/broadcast/**/dry-run/
 .vercel
+contracts/verify-input.json
