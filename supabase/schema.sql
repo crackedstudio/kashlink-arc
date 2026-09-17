@@ -6,20 +6,17 @@
 
 create table if not exists public.events (
   id           uuid primary key default gen_random_uuid(),
-  type         text        not null check (type in ('created', 'claimed', 'reverted')),
-  token        text        not null default 'nim' check (token in ('nim', 'usdt')),
-  -- Each token's smallest unit: luna for NIM, 6 decimals for USDT. Never add them together.
-  value_units  bigint      not null check (value_units >= 0 and value_units < 1e15),
-  -- Nimiq "NQ12 ABCD ..." (2 digits plus 8 groups of 4), or an Ethereum 0x address.
-  link_address text        not null check (
-    link_address ~ '^NQ[0-9]{2}( [A-Z0-9]{4}){8}$' or link_address ~ '^0x[0-9a-fA-F]{40}$'
-  ),
+  type         text        not null check (type in ('link_created', 'link_claimed', 'link_refunded')),
+  -- Native USDC wei on Arc, 18 decimals. Sent as a decimal string; numeric keeps every digit.
+  value_units  numeric(38, 0) not null check (value_units >= 0),
+  -- The link's address on Arc — the escrow contract's key for it.
+  link_address text        not null check (link_address ~ '^0x[0-9a-fA-F]{40}$'),
   -- Random per-install id from localStorage. Not a wallet address, not a person.
   device_id    text        not null check (device_id ~ '^[a-f0-9-]{8,64}$'),
   created_at   timestamptz not null default now()
 );
 
--- A link can only be created, claimed, and reverted once each, so duplicate sends (retries,
+-- A link can only be created, claimed, and refunded once each, so duplicate sends (retries,
 -- reopened pages) cannot inflate the numbers: the second one is rejected with a 409 the app ignores.
 -- The app must not use PostgREST's ignore-duplicates upsert here — that needs an UPDATE policy,
 -- which would let anyone holding the public key rewrite recorded history.

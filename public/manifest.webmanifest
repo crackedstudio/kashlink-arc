@@ -1,7 +1,7 @@
 {
   "name": "KashLink",
   "short_name": "KashLink",
-  "description": "Send NIM to anyone with a link. A Cash Link mini app for Nimiq Pay.",
+  "description": "Send USDC to anyone as a link. Built on Arc.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8f8f8",

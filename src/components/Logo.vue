@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// KashLink mark: NIM hexagon with a K. Same artwork as public/logo.svg (favicon, app icon).
+// KashLink mark: gold hexagon with a K. Same artwork as public/logo.svg (favicon, app icon).
 defineProps<{ size?: number }>()
 </script>
 

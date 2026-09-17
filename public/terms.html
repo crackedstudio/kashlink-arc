@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#f8f8f8" />
     <meta name="robots" content="index, follow" />
-    <meta name="description" content="Terms and Conditions for KashLink, the mini app that sends NIM and USDT as a shareable link." />
+    <meta name="description" content="Terms and Conditions for KashLink, the app that sends USDC on Arc as a shareable link." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -142,89 +142,85 @@
       </a>
 
       <h1>Terms and Conditions</h1>
-      <p class="updated">Last updated: 16 September 2026</p>
+      <p class="updated">Last updated: 17 September 2026</p>
 
       <section class="summary" aria-label="Summary">
         <h2>The short version</h2>
         <ul>
-          <li><strong>A KashLink is cash.</strong> Whoever holds the link controls the money. There is no account, no password and no way to recover a link that is lost, leaked or claimed by someone else.</li>
-          <li><strong>We never hold your funds or your keys.</strong> Keys are created on your device and stay there. We cannot freeze, reverse or recover anything.</li>
-          <li><strong>NIM links are free. USDT links cost 1% (minimum $0.10)</strong>, paid by the sender on top of the amount, and charged whether the link is claimed or taken back.</li>
+          <li><strong>A KashLink is cash.</strong> Whoever holds the link can claim the money. There is no account, no password and no way to recover a link that is lost, leaked or claimed by someone else.</li>
+          <li><strong>Your USDC sits in a smart contract on Arc, not with us.</strong> The KashLink escrow contract is open source and verified. We cannot move, freeze or reverse anything in it. Only the link holder (to claim) and the sender (to take an expired link back) can move funds.</li>
+          <li><strong>Links cost 1% (minimum $0.10) plus $0.01 of prepaid claim gas</strong>, paid by the sender on top of the amount, and charged whether the link is claimed or taken back.</li>
           <li><strong>Blockchain transactions are final.</strong> Check the amount and, when claiming, the receiving address before you confirm.</li>
-          <li><strong>Clearing your browser or app data deletes your unclaimed links</strong>, and the money in them with it.</li>
+          <li><strong>An unclaimed link can be taken back after it expires</strong> — by the wallet that created it, from any device.</li>
         </ul>
       </section>
 
-      <p style="margin-top: 24px;">These Terms and Conditions (the <strong>"Terms"</strong>) govern your use of KashLink, a mini app for Nimiq Pay and the web that lets you send NIM and USDT as a shareable link (the <strong>"Service"</strong>). The Service is operated by Cracked Studios Ltd, a company incorporated in the Federal Republic of Nigeria (<strong>"we"</strong>, <strong>"us"</strong>, <strong>"our"</strong>). By creating, opening or claiming a KashLink, or otherwise using the Service, you agree to these Terms. If you do not agree, do not use the Service.</p>
+      <p style="margin-top: 24px;">These Terms and Conditions (the <strong>"Terms"</strong>) govern your use of KashLink, a web app that lets you send USDC on the Arc blockchain as a shareable link (the <strong>"Service"</strong>). The Service is operated by Cracked Studios Ltd, a company incorporated in the Federal Republic of Nigeria (<strong>"we"</strong>, <strong>"us"</strong>, <strong>"our"</strong>). By creating, opening or claiming a KashLink, or otherwise using the Service, you agree to these Terms. If you do not agree, do not use the Service.</p>
 
       <h2><small>1.</small> What KashLink is</h2>
-      <p>KashLink is a piece of software. It turns an amount of cryptocurrency into a link that anyone holding it can claim. It supports:</p>
-      <ul>
-        <li><strong>NIM</strong>, the native currency of the Nimiq blockchain; and</li>
-        <li><strong>USDT</strong> (Tether USD) issued on the Polygon blockchain.</li>
-      </ul>
-      <p>KashLink is <strong>non-custodial</strong>. Every link is a freshly generated blockchain address whose private key is created in your browser or in Nimiq Pay and placed in the link itself. We do not receive, store, hold or have access to that key, to the funds at that address, or to your wallet. We cannot move, freeze, reverse or recover funds, and we cannot tell you who has opened a link.</p>
-      <p>KashLink does not hold balances, offer accounts, convert currencies or move funds on anyone's behalf. Every transfer is signed by a key that you or the link holder controls and is broadcast directly to the blockchain; the Service only prepares transactions and, for USDT, pays the network gas. Any fiat amounts shown in the app are indicative estimates from a third-party price source and are not an offer to exchange.</p>
-      <p>KashLink is an independent project. It is not affiliated with, endorsed by or operated by Nimiq, Tether, Polygon or any wallet provider. Nothing in the Service is financial, investment, legal or tax advice.</p>
+      <p>KashLink is a piece of software. It turns an amount of <strong>USDC on Arc</strong> — Circle's blockchain, on which USDC is also the currency used to pay network fees — into a link that anyone holding it can claim.</p>
+      <p>KashLink is <strong>non-custodial</strong>. Every link is a freshly generated key pair created in your browser. The private key is placed in the link itself; its address identifies the link in the <strong>KashLink escrow contract</strong>, a smart contract deployed on Arc whose source code is published and verified on the Arc block explorer. When you create a link, your wallet deposits the USDC into that contract. When the link is claimed, the contract pays the USDC to the address the link holder names. We do not receive, store, hold or have access to the key, to the funds in the contract, or to your wallet.</p>
+      <p>The contract has an owner (us) whose only powers are to change the fee rate (capped at 5%), the fee floor and the address fees are paid to. The owner <strong>cannot</strong> withdraw escrowed funds, block or reverse a claim or a refund, pause the contract or change its code. There is no upgrade mechanism.</p>
+      <p>KashLink does not hold balances, offer accounts, convert currencies or move funds on anyone's behalf. Every transaction is signed by a key that you or the link holder controls and is broadcast directly to the Arc network. Nothing in the Service is financial, investment, legal or tax advice.</p>
+      <p>KashLink is an independent project. It is not affiliated with, endorsed by or operated by Circle, Arc Network Services LLC or any wallet provider.</p>
 
       <h2><small>2.</small> Who may use the Service</h2>
       <p>You may use the Service only if you:</p>
       <ul>
         <li>are at least 18 years old, or the age of majority where you live, whichever is higher;</li>
         <li>have the legal capacity to enter into these Terms;</li>
-        <li>are not located in, or a resident of, a jurisdiction where using the Service or holding the supported tokens is prohibited; and</li>
+        <li>are not located in, or a resident of, a jurisdiction where using the Service or holding USDC is prohibited; and</li>
         <li>are not a person, or acting on behalf of a person, subject to sanctions administered by the United Nations, the European Union, the United Kingdom, the United States or any other relevant authority.</li>
       </ul>
-      <p>You are responsible for making sure that your use of the Service is lawful where you are.</p>
+      <p>You are responsible for making sure that your use of the Service is lawful where you are. USDC is issued by Circle and the Arc network is operated by Arc Network Services LLC and a permissioned validator set; both apply their own eligibility and compliance rules, including the ability to block addresses, which are outside our control.</p>
 
       <h2><small>3.</small> How a link works, and what that means for you</h2>
-      <p class="warn"><strong>Whoever holds the link controls the money.</strong> A KashLink contains the private key to the funds. Anyone who obtains the link — by being sent it, by seeing it on a screen, by finding it in a chat backup, a clipboard, a browser history or a screenshot — can claim the funds, and you will have no recourse against us. Treat a KashLink exactly as you would treat cash.</p>
+      <p class="warn"><strong>Whoever holds the link controls the money.</strong> A KashLink contains the private key that authorises the claim. Anyone who obtains the link — by being sent it, by seeing it on a screen, by finding it in a chat backup, a clipboard, a browser history or a screenshot — can claim the funds to an address of their choosing, and you will have no recourse against us. Treat a KashLink exactly as you would treat cash.</p>
       <p>In particular, you acknowledge and accept that:</p>
       <ul>
-        <li><strong>There is no recovery.</strong> If a link is lost, deleted, sent to the wrong person, intercepted or claimed by someone other than the intended recipient, the funds cannot be recovered by us or by anyone else.</li>
-        <li><strong>There is no identity check.</strong> The Service does not verify who opens or claims a link. A claim is valid if it is signed with the link's key, regardless of who is holding it.</li>
-        <li><strong>The key lives on your device.</strong> The Service stores the keys of links you have created in your browser's or Nimiq Pay's local storage so that you can see them and take unclaimed funds back. If you clear site data, uninstall the app, lose the device or use a private/incognito window, those keys — and access to any unclaimed funds — are gone. We keep no copy.</li>
+        <li><strong>There is no recovery of a claimed link.</strong> If a link is intercepted or claimed by someone other than the intended recipient, the funds cannot be recovered by us or by anyone else.</li>
+        <li><strong>There is no identity check.</strong> The Service does not verify who opens or claims a link. A claim is valid if it is sent from the link's address, regardless of who is holding the link.</li>
+        <li><strong>Losing the link means losing the ability to share it, not the money.</strong> The Service stores the keys of links you create in your browser's local storage so you can re-share them. If you clear site data or lose the device, you can no longer share those links, but you can still take back any unclaimed link after it expires using the wallet that created it.</li>
         <li><strong>Sharing channels are not ours.</strong> Links are usually shared through messaging apps. Their security, backups and retention are outside our control.</li>
-        <li><strong>A recipient may bypass the app.</strong> Because the link is a private key, a recipient may import it into any compatible wallet and move the funds without using the Service.</li>
+        <li><strong>A recipient may bypass the app.</strong> Because the link is a private key, a recipient may import it into any wallet and call the contract's claim function directly.</li>
         <li><strong>Only trust the genuine app.</strong> Anyone can copy open-source software and host a lookalike that steals keys. We are not responsible for sites, apps or links that imitate KashLink. Check the address you are visiting, and only open links from people you know.</li>
       </ul>
 
       <h2><small>4.</small> Fees</h2>
       <table>
-        <tr><th>Token</th><th>Fee</th></tr>
-        <tr><td>NIM</td><td>None. Nimiq transactions are free.</td></tr>
-        <tr><td>USDT</td><td><strong>1%</strong> of the link amount, with a minimum of <strong>$0.10</strong> (0.10 USDT).</td></tr>
+        <tr><th>Item</th><th>Amount</th></tr>
+        <tr><td>Service fee</td><td><strong>1%</strong> of the link amount, with a minimum of <strong>$0.10</strong>.</td></tr>
+        <tr><td>Prepaid claim gas</td><td><strong>$0.01</strong>, sent to the link's own address so the recipient can claim without holding anything first.</td></tr>
       </table>
-      <p>The USDT fee:</p>
+      <p>Both:</p>
       <ul>
-        <li>is <strong>paid by the sender on top of the amount</strong>, so the recipient receives the full round amount shown when the link was created;</li>
-        <li>is <strong>charged when the link is resolved — whether it is claimed by a recipient or returned to the sender</strong>. The fee covers the network gas that we pay on the sender's and recipient's behalf, which is spent in either case;</li>
-        <li>is shown on the review screen before you send, and again before you return a link;</li>
-        <li>is retained by us and is <strong>non-refundable</strong> once the link is funded.</li>
+        <li>are <strong>paid by the sender on top of the amount</strong>, so the recipient receives the full round amount shown when the link was created;</li>
+        <li>are <strong>charged when the link is created and are not returned</strong>, whether the link is later claimed or taken back. A link therefore costs the same either way, which is what makes creating and cancelling links pointless as an attack;</li>
+        <li>are shown on the review screen before you send;</li>
+        <li>are enforced by the escrow contract, and the service fee is retained by us and is <strong>non-refundable</strong>.</li>
       </ul>
-      <p>The fee schedule is stated in the app at the time you create a link. We may change it for links created after the change. Network transaction fees on Nimiq or Polygon that you pay directly from your own wallet when funding a link are set by those networks, not by us.</p>
+      <p>Whatever part of the prepaid gas the claim does not use stays at the link's address and is not recovered. The fee schedule in force is whatever the contract reports at the time you create a link; we may change it, within the contract's 5% cap, for links created after the change. Network fees you pay from your own wallet when creating or refunding a link are set by the Arc network, not by us.</p>
 
-      <h2><small>5.</small> USDT links and the relayer</h2>
-      <p>A newly created Polygon address holds no POL to pay for gas, so a USDT link cannot move its own funds. To make claiming possible, the Service submits the claim on the holder's behalf through a relayer that we operate and that pays the gas. You acknowledge that:</p>
+      <h2><small>5.</small> The escrow contract</h2>
+      <p>The escrow contract is the part of the Service that holds funds. You acknowledge that:</p>
       <ul>
-        <li>the relayer is a <strong>best-efforts</strong> service with no guarantee of availability, speed or inclusion of any transaction in a block;</li>
-        <li>the relayer only relays transfers that its checks accept. It will refuse a request that would fail on-chain, that is below the minimum relayable amount, that does not match the expected transaction shape, or that comes from an address whose funds have been frozen by the token issuer;</li>
-        <li>if the relayer is unavailable, out of funds or discontinued, USDT links can still be swept by importing the link's key into any wallet that can pay Polygon gas, but the Service will not be able to complete the claim for you;</li>
-        <li>USDT is issued and controlled by Tether. Tether can freeze addresses and we have no influence over that.</li>
+        <li>the contract is <strong>immutable</strong>. Its address and verified source code are published in the app's repository and on the Arc block explorer, and you can read exactly what it does before you use it;</li>
+        <li>a claim is paid to whatever address the link holder names. The contract cannot tell a right address from a wrong one. <strong>USDC sent to an address you do not control is lost</strong>;</li>
+        <li>the contract will refuse to pay an address that the Arc network's blocklist prohibits, and a claim or refund to such an address will fail;</li>
+        <li>smart contracts can contain bugs. The contract has automated tests but has not been independently audited. Do not put more into a link than you are prepared to lose.</li>
       </ul>
 
       <h2><small>6.</small> Returning an unclaimed link</h2>
-      <p>The Service lets a sender return the funds from a link that has not been claimed for <strong>7 days</strong> or more. This is a convenience, not a guarantee, and it is <strong>not automatic</strong>: the return is signed with the key stored on the sender's device, so it happens only when the sender opens the app and taps Return. Funds are returned to a basic wallet address you control at the time of the return. For USDT links, the fee described in section 4 applies to a return.</p>
-      <p>Because the key is in the link, a recipient can still claim a link at any time before you return it, including after the 7-day mark.</p>
+      <p>When you create a link you choose how long it stays claimable — by default 7 days. After that time, if nobody has claimed it, the wallet that created it may call the contract's refund function to take the full link amount back. The Service offers a button for this; the contract enforces it. It is <strong>not automatic</strong>: the refund happens only when you ask for it and sign it with your wallet.</p>
+      <p>A link remains claimable until it is refunded, including after its expiry time. Whichever of claim and refund reaches the network first wins; the other fails.</p>
 
       <h2><small>7.</small> Your responsibilities</h2>
       <p>You are solely responsible for:</p>
       <ul>
-        <li>checking the amount, token and fee before you confirm a transaction;</li>
+        <li>checking the amount and fee before you confirm a transaction;</li>
         <li>keeping links confidential and sharing them only with the intended recipient over a channel you trust;</li>
         <li>the security of your device, browser, wallet and messaging apps;</li>
-        <li>keeping a device with your unclaimed links intact if you may want to return them;</li>
-        <li>when claiming, providing a <strong>basic wallet address</strong> that you control. Funds sent to a contract address (for example an HTLC or vesting contract) may be accepted by the network and then become permanently inaccessible;</li>
+        <li>when claiming, providing an <strong>address on Arc that you control</strong>. Funds sent to a contract that cannot receive them, or to an address on another network, may be permanently inaccessible;</li>
         <li>any tax that arises from sending, receiving or holding cryptocurrency; and</li>
         <li>complying with the laws that apply to you.</li>
       </ul>
@@ -235,21 +231,20 @@
         <li>for money laundering, terrorist financing, fraud, extortion, ransomware payments, tax evasion or any other unlawful purpose;</li>
         <li>to evade sanctions or export controls;</li>
         <li>to send funds to or from a person you are prohibited from dealing with;</li>
-        <li>to interfere with, overload, probe or attack the Service, the relayer or the networks it uses, including by submitting malformed requests or by creating and reverting links to drain the relayer;</li>
+        <li>to interfere with, overload, probe or attack the Service or the networks it uses;</li>
         <li>to scrape, harvest or attempt to derive link keys or the identity of other users; or</li>
         <li>in any way that infringes the rights of others.</li>
       </ul>
-      <p>We may block requests to the relayer or otherwise restrict use of the Service where we reasonably believe these Terms are being breached, and we may cooperate with lawful requests from law-enforcement and regulatory authorities. Because the Service is non-custodial and has no accounts, we cannot identify users, screen transactions or recover funds, and doing any of the above does not give us control over anyone's funds. You alone are responsible for how you use the Service.</p>
+      <p>We may restrict use of the hosted app where we reasonably believe these Terms are being breached, and we may cooperate with lawful requests from law-enforcement and regulatory authorities. Because the Service is non-custodial and has no accounts, we cannot identify users, screen transactions or recover funds, and nothing in this section obliges us to do so.</p>
 
       <h2><small>9.</small> Third-party services</h2>
       <p>The Service depends on infrastructure we do not control, including:</p>
       <ul>
-        <li><strong>Nimiq Pay and the Nimiq Hub</strong>, which sign transactions with your wallet;</li>
-        <li>injected <strong>EVM wallets</strong> (for USDT in a browser);</li>
-        <li>the <strong>Nimiq and Polygon</strong> blockchains and the public RPC nodes that serve them;</li>
-        <li><strong>Supabase</strong>, which hosts the relayer and the analytics table;</li>
-        <li><strong>CoinGecko</strong>, which supplies the indicative NIM/USD price; and</li>
-        <li><strong>Vercel</strong>, which hosts the app, and <strong>nimpay.app</strong>, which opens shared links in Nimiq Pay.</li>
+        <li>the <strong>Arc blockchain</strong>, its validators and the public RPC nodes that serve it;</li>
+        <li><strong>USDC</strong>, issued and controlled by Circle;</li>
+        <li>injected <strong>EVM wallets</strong> such as MetaMask or Rabby, which sign your transactions;</li>
+        <li><strong>Supabase</strong>, which hosts the analytics table; and</li>
+        <li><strong>Vercel</strong>, which hosts the app.</li>
       </ul>
       <p>Your use of those services is governed by their own terms. We are not responsible for their availability, accuracy, security or conduct. A wallet's approval screen, not KashLink, is the final word on what you are signing.</p>
 
@@ -258,32 +253,31 @@
       <ul>
         <li><strong>Keys never leave your device.</strong> The link's private key travels in the URL fragment (<code>#…</code>), which browsers do not send to servers, and is stored only in local storage on your device.</li>
         <li><strong>No accounts, no personal details.</strong> We do not ask for your name, email, phone number or wallet address, and we do not collect them.</li>
-        <li><strong>Usage analytics.</strong> When analytics are enabled, the app records, for each link created, claimed or returned: the event type, the token, the amount, the link's <em>public</em> address (which cannot be used to spend the funds) and a random identifier generated on your device that is not tied to a person or a wallet. The app never records the page URL, the link key or your wallet address. This data is used to understand how much the Service is used and may be retained indefinitely in aggregate.</li>
-        <li><strong>Relayer.</strong> To claim a USDT link, the app sends the signed transfer to the relayer. The relayer sees the link address, the destination address, the amount and the signature — all of which become public on the Polygon blockchain anyway — and may log requests for operational and abuse-prevention purposes.</li>
-        <li><strong>Blockchains are public.</strong> Every transaction is permanently and publicly recorded on the Nimiq or Polygon network and can be linked to the addresses involved by anyone.</li>
+        <li><strong>Usage analytics.</strong> When analytics are enabled, the app records, for each link created, claimed or returned: the event type, the amount, the link's <em>public</em> address (which cannot be used to spend the funds) and a random identifier generated on your device that is not tied to a person or a wallet. The app never records the page URL, the link key or your wallet address.</li>
+        <li><strong>Blockchains are public.</strong> Every deposit, claim and refund is permanently and publicly recorded on Arc, together with the addresses involved, and can be read by anyone.</li>
         <li><strong>Hosting and networking.</strong> Our hosting provider and the RPC nodes the app contacts may receive your IP address and standard request metadata as part of serving the app.</li>
       </ul>
-      <p>We do not sell data and we do not use advertising trackers. The random analytics identifier is stored in your browser's local storage; you can remove it at any time by clearing the site's data, after which the app will count you as a new device. Because we hold no information that identifies you, we are generally unable to locate, correct or delete data about a specific person, but you can write to us at <a href="mailto:support@crackedstudios.xyz">support@crackedstudios.xyz</a> with any privacy question, including to exercise any right you have under the Nigeria Data Protection Act 2023 or other data-protection law that applies to you. If we introduce a separate privacy policy, it will be linked from the app and will take precedence over this section.</p>
+      <p>We do not sell data and we do not use advertising trackers. The random analytics identifier is stored in your browser's local storage; you can remove it at any time by clearing the site's data, after which the app will count you as a new device. Because we hold no information that identifies you, we are generally unable to locate, correct or delete data about a specific person, but you can contact us at the address in section 19 with any question.</p>
 
       <h2><small>11.</small> Risks you accept</h2>
       <p>Cryptocurrency carries risk. By using the Service you accept, among others, that:</p>
       <ul>
-        <li><strong>transactions are irreversible</strong> once broadcast;</li>
-        <li>the <strong>value of NIM and USDT can change</strong>, including to zero, and USDT depends on its issuer maintaining its peg;</li>
-        <li>blockchains may be <strong>congested, forked, halted or attacked</strong>, and transactions may be delayed or fail;</li>
-        <li>software, including the Service, wallets, browsers and operating systems, may contain <strong>bugs or vulnerabilities</strong>;</li>
-        <li>the regulatory treatment of cryptocurrency is <strong>uncertain and may change</strong>, which may affect your ability to use the Service or the tokens; and</li>
-        <li>the Service may be <strong>modified, suspended or discontinued</strong> at any time. Because it is non-custodial, you can always recover funds from a link by importing its key into a compatible wallet, but the convenience features of the app may not be available.</li>
+        <li><strong>transactions are irreversible</strong> once included in a block;</li>
+        <li><strong>USDC depends on its issuer</strong> maintaining its peg and honouring redemptions, and its issuer and the Arc network can block addresses;</li>
+        <li>Arc is a <strong>newly launched network</strong> that may be congested, halted, changed or attacked, and transactions may be delayed or fail;</li>
+        <li>software, including the Service, the escrow contract, wallets, browsers and operating systems, may contain <strong>bugs or vulnerabilities</strong>;</li>
+        <li>the regulatory treatment of cryptocurrency is <strong>uncertain and may change</strong>, which may affect your ability to use the Service or USDC; and</li>
+        <li>the hosted app may be <strong>modified, suspended or discontinued</strong> at any time. Because the contract is immutable and non-custodial, a link can always be claimed with its key, and an expired link can always be refunded by its sender, by calling the contract directly — with or without this app.</li>
       </ul>
 
       <h2><small>12.</small> Open source and intellectual property</h2>
-      <p>The KashLink source code is published under the MIT License. Your use of the code is governed by that licence. These Terms govern your use of the hosted Service that we operate, not your use of the code. The KashLink name and logo are ours, and the Nimiq name, logo and style are the property of their respective owners; these Terms grant you no rights in any of them.</p>
+      <p>The KashLink source code, including the escrow contract, is published under the MIT License. Your use of the code is governed by that licence. These Terms govern your use of the hosted Service that we operate, not your use of the code. The KashLink name and logo are ours, and the Circle, USDC and Arc names and logos are the property of their respective owners; these Terms grant you no rights in any of them.</p>
 
       <h2><small>13.</small> No warranty</h2>
-      <p>THE SERVICE IS PROVIDED <strong>"AS IS"</strong> AND <strong>"AS AVAILABLE"</strong>, WITHOUT WARRANTY OF ANY KIND, WHETHER EXPRESS, IMPLIED OR STATUTORY, INCLUDING ANY WARRANTY OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, ACCURACY OR UNINTERRUPTED OR ERROR-FREE OPERATION. WE DO NOT WARRANT THAT ANY LINK WILL BE CLAIMABLE, THAT THE RELAYER WILL BE AVAILABLE, THAT ANY TRANSACTION WILL BE CONFIRMED, OR THAT ANY PRICE SHOWN IS ACCURATE. YOU USE THE SERVICE ENTIRELY AT YOUR OWN RISK.</p>
+      <p>THE SERVICE IS PROVIDED <strong>"AS IS"</strong> AND <strong>"AS AVAILABLE"</strong>, WITHOUT WARRANTY OF ANY KIND, WHETHER EXPRESS, IMPLIED OR STATUTORY, INCLUDING ANY WARRANTY OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, ACCURACY OR UNINTERRUPTED OR ERROR-FREE OPERATION. WE DO NOT WARRANT THAT ANY LINK WILL BE CLAIMABLE, THAT THE ESCROW CONTRACT IS FREE OF DEFECTS, OR THAT ANY TRANSACTION WILL BE CONFIRMED. YOU USE THE SERVICE ENTIRELY AT YOUR OWN RISK.</p>
 
       <h2><small>14.</small> Limitation of liability</h2>
-      <p>TO THE FULLEST EXTENT PERMITTED BY LAW, WE AND OUR CONTRIBUTORS, OFFICERS, EMPLOYEES AND AGENTS WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF FUNDS, PROFITS, DATA, GOODWILL OR OPPORTUNITY, ARISING OUT OF OR IN CONNECTION WITH THE SERVICE OR THESE TERMS, EVEN IF WE HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. THIS INCLUDES, WITHOUT LIMITATION, LOSS CAUSED BY A LINK BEING LOST, LEAKED, INTERCEPTED OR CLAIMED BY AN UNINTENDED PERSON; BY CLEARED OR LOST DEVICE DATA; BY FUNDS SENT TO AN INCORRECT OR CONTRACT ADDRESS; BY THE ACTS OF THIRD-PARTY WALLETS, NETWORKS, ISSUERS OR SERVICE PROVIDERS; BY THE RELAYER REFUSING, DELAYING OR FAILING TO SUBMIT A TRANSACTION; BY A CHANGE IN LAW OR REGULATION; OR BY UNAUTHORISED ACCESS TO YOUR DEVICE.</p>
+      <p>TO THE FULLEST EXTENT PERMITTED BY LAW, WE AND OUR CONTRIBUTORS, OFFICERS, EMPLOYEES AND AGENTS WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF FUNDS, PROFITS, DATA, GOODWILL OR OPPORTUNITY, ARISING OUT OF OR IN CONNECTION WITH THE SERVICE OR THESE TERMS, EVEN IF WE HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. THIS INCLUDES, WITHOUT LIMITATION, LOSS CAUSED BY A LINK BEING LOST, LEAKED, INTERCEPTED OR CLAIMED BY AN UNINTENDED PERSON; BY CLEARED OR LOST DEVICE DATA; BY FUNDS SENT TO AN INCORRECT OR CONTRACT ADDRESS; BY THE ACTS OF THIRD-PARTY WALLETS, NETWORKS, ISSUERS OR SERVICE PROVIDERS; BY THE ESCROW CONTRACT BEHAVING AS ITS PUBLISHED CODE SPECIFIES; BY A CHANGE IN LAW OR REGULATION; OR BY UNAUTHORISED ACCESS TO YOUR DEVICE.</p>
       <p>OUR TOTAL AGGREGATE LIABILITY TO YOU FOR ALL CLAIMS ARISING OUT OF OR RELATING TO THE SERVICE WILL NOT EXCEED THE GREATER OF (A) THE FEES YOU PAID TO US UNDER SECTION 4 IN THE TWELVE MONTHS BEFORE THE EVENT GIVING RISE TO THE CLAIM AND (B) TEN US DOLLARS (USD 10).</p>
       <p>Nothing in these Terms excludes or limits liability that cannot be excluded or limited under applicable law, including for fraud or for death or personal injury caused by negligence. Some jurisdictions do not allow certain exclusions, so parts of this section may not apply to you.</p>
 
@@ -308,7 +302,7 @@
       </ul>
 
       <h2><small>19.</small> Contact</h2>
-      <p>Questions about these Terms: <a href="mailto:support@crackedstudios.xyz">support@crackedstudios.xyz</a>. Source code and issue tracker: <a href="https://github.com/crackedstudio/KashLink" rel="noopener">github.com/crackedstudio/KashLink</a>.</p>
+      <p>Questions about these Terms: <a href="mailto:support@crackedstudios.xyz">support@crackedstudios.xyz</a>. Source code and issue tracker: <a href="https://github.com/crackedstudio/kashlink-arc" rel="noopener">github.com/crackedstudio/kashlink-arc</a>.</p>
 
       <footer>
         <p>KashLink is a non-custodial tool. It never holds your keys or your funds. Share links like cash.</p>

@@ -16,7 +16,7 @@ import { loadLinks, saveLink, type StoredLink } from './storage'
  * All amounts are native USDC wei (18 decimals). See arc.ts.
  */
 
-export const DEFAULT_EXPIRY_DAYS = 7
+/** The middle option is the default. */
 export const EXPIRY_OPTIONS = [
   { label: '1 day', seconds: 86_400 },
   { label: '7 days', seconds: 7 * 86_400 },
@@ -117,7 +117,7 @@ export function quoteWith(params: FeeParams, amount: bigint): Quote {
 }
 
 /** What a link of `amount` costs, straight from the contract so the numbers can never disagree. */
-export async function quote(amount: bigint): Promise<Quote> {
+async function quote(amount: bigint): Promise<Quote> {
   const [fee, stipend] = await Promise.all([
     rpc.readContract({ ...escrow, functionName: 'feeFor', args: [amount] }),
     rpc.readContract({ ...escrow, functionName: 'STIPEND' }),

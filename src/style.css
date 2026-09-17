@@ -1,4 +1,4 @@
-/* Nimiq Pay palette — from the official Nimiq style guide (nimiq/nimiq-style). */
+/* Palette. The names date from the Nimiq Pay version of the app and are kept so the components still resolve. */
 :root {
   --nq-blue: #1f2348;
   --nq-blue-darkened: #151833;
@@ -31,7 +31,7 @@
   --shadow-btn: 0 6px 16px rgba(5, 130, 202, 0.3);
   --ease: cubic-bezier(0.25, 0, 0, 1);
 
-  /* Horizontal gutter, matches Nimiq Pay's edge padding. */
+  /* Horizontal gutter. */
   --gutter: 20px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -44,7 +44,7 @@
 }
 
 html {
-  /* No rubber-band bounce inside the Nimiq Pay WebView. */
+  /* No rubber-band bounce when installed as a PWA. */
   overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
 }
@@ -151,7 +151,7 @@ p {
   box-shadow: var(--shadow-card);
 }
 
-/* Nimiq pill button */
+/* Pill button */
 .btn {
   position: relative;
   display: flex;
@@ -223,7 +223,7 @@ p {
   font-weight: 700;
 }
 
-/* Small uppercase label, as in the Nimiq style guide */
+/* Small uppercase label */
 .label {
   color: var(--muted);
   font-size: 12px;

@@ -71,10 +71,6 @@ export async function connect(wallet: DiscoveredWallet): Promise<Connected> {
   return current
 }
 
-export function disconnect() {
-  current = null
-}
-
 async function switchToArc(provider: EIP1193Provider) {
   const chainId = `0x${CHAIN.id.toString(16)}`
   try {
