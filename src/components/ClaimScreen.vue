@@ -11,7 +11,10 @@ import Icon from './Icon.vue'
 import Logo from './Logo.vue'
 
 const props = defineProps<{ linkKey: Hex, message?: string }>()
-const emit = defineEmits<{ done: [] }>()
+const emit = defineEmits<{ done: [], openWallet: [] }>()
+
+/** Passkey wallets need a Circle client key; without one the option simply isn't offered. */
+const PASSKEYS = !!import.meta.env.VITE_CIRCLE_CLIENT_KEY
 
 /**
  * loading    reading the link from the contract
@@ -34,6 +37,9 @@ const error = ref<string | null>(null)
 const connecting = ref(false)
 /** Shown when the recipient would rather paste an address than connect a wallet. */
 const manual = ref(false)
+/** Set when the payout went to a passkey wallet made right here. */
+const toPasskey = ref(false)
+const creating = ref(false)
 let pollTimer: number | undefined
 
 const token = computed(() => link.value?.token)
@@ -137,6 +143,30 @@ async function claimWithWallet() {
   await claim()
 }
 
+/**
+ * For someone with no wallet at all: register a passkey, get the smart account it owns, claim to
+ * it. The account is only an address until its first outgoing transaction, which the claimed USDC
+ * can pay for. The SDK is loaded on demand — it is a third of the bundle and most people never need it.
+ */
+async function claimToNewWallet() {
+  creating.value = true
+  error.value = null
+  try {
+    const { createPasskeyWallet } = await import('../lib/passkey')
+    const wallet = await createPasskeyWallet()
+    to.value = wallet.address
+    toPasskey.value = true
+  }
+  catch (e) {
+    error.value = /NotAllowed|abort|cancel/i.test(String((e as Error).name) + String((e as Error).message)) ? 'Passkey setup was cancelled.' : errorMessage(e)
+    return
+  }
+  finally {
+    creating.value = false
+  }
+  await claim()
+}
+
 async function claim() {
   if (!toValid.value) return
   const recipient = to.value.trim() as Hex
@@ -195,6 +225,10 @@ async function claim() {
         The prepaid gas for this link has been used up. Ask the sender to wait for it to expire,
         take it back, and send a new one.
       </p>
+      <p v-else-if="state === 'success' && toPasskey" class="status muted">
+        {{ amount }} in {{ token?.symbol }} is in your new KashLink wallet, <strong>{{ shortAddress(to.trim()) }}</strong>.
+        Your passkey controls it; open it any time from the home screen.
+      </p>
       <p v-else-if="state === 'success'" class="status muted">
         {{ amount }} in {{ token?.symbol }} is now in <strong>{{ shortAddress(to.trim()) }}</strong> on {{ CHAIN.name }}.
       </p>
@@ -249,8 +283,16 @@ async function claim() {
           <Icon name="wallet" :size="20" /> Connect wallet & claim {{ amount }}
         </template>
       </button>
-      <button class="link-btn switch" :disabled="state === 'claiming'" @click="manual = !manual; error = null">
-        {{ manual ? 'Use a wallet instead' : 'No wallet? Paste an address instead' }}
+      <button v-if="PASSKEYS && !manual" class="btn btn-outline" :disabled="creating || state === 'claiming'" @click="claimToNewWallet">
+        <template v-if="creating">
+          <span class="spinner" /> Setting up your passkey…
+        </template>
+        <template v-else>
+          No wallet? Create one with a passkey
+        </template>
+      </button>
+      <button class="link-btn switch" :disabled="state === 'claiming' || creating" @click="manual = !manual; error = null">
+        {{ manual ? 'Use a wallet instead' : PASSKEYS ? 'Or paste an address' : 'No wallet? Paste an address instead' }}
       </button>
     </template>
 
@@ -261,7 +303,10 @@ async function claim() {
       <a v-if="claimTx" class="link-btn tx" :href="txUrl(claimTx)" target="_blank" rel="noopener">
         View transaction <Icon name="external" :size="14" />
       </a>
-      <button class="btn btn-primary" @click="emit('done')">
+      <button v-if="state === 'success' && toPasskey" class="btn btn-primary" @click="emit('openWallet')">
+        <Icon name="wallet" :size="20" /> Open my wallet
+      </button>
+      <button v-else class="btn btn-primary" @click="emit('done')">
         {{ state === 'success' || state === 'taken' ? 'Done' : 'Send your own KashLink' }}
       </button>
     </template>

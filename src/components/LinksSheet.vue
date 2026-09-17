@@ -3,7 +3,7 @@ import type { Hex } from 'viem'
 import { computed, onMounted, ref, watch } from 'vue'
 import { track } from '../lib/analytics'
 import { formatCountdown, formatDate } from '../lib/format'
-import { chainState, isExpired, linksFundedBy, type LinkStatus, readLink, refreshStatuses, refundLink, unclaimedAmount } from '../lib/links'
+import { chainState, isExpired, linksFundedBy, type LinkStatus, refreshStatuses, refundLink, unclaimedAmount } from '../lib/links'
 import type { StoredLink } from '../lib/storage'
 import { saveLink } from '../lib/storage'
 import { formatAmount, NATIVE, type Token, tokenByAddress } from '../lib/tokens'
@@ -75,11 +75,6 @@ async function loadFromChain() {
   try {
     const found = await linksFundedBy(props.wallet.address)
     fromChain.value = found.map(l => ({ id: l.id, token: l.token, amountEach: l.amountEach, slots: l.slots, createdAt: null, stored: null }))
-    // Statuses for the ones this device did not know about.
-    const known = new Set(props.links.map(l => l.id.toLowerCase()))
-    await Promise.all(found.filter(l => !known.has(l.id.toLowerCase())).map(async (l) => {
-      chainState[l.id] = await readLink(l.id)
-    }))
   }
   catch {
     // history is a bonus; the local list still works

@@ -3,7 +3,6 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import { reactive } from 'vue'
 import { CHAIN, ESCROW_ADDRESS, fees, rpc } from './arc'
 import { ESCROW_ABI } from './escrow-abi'
-import { escrowLogs } from './explorer'
 import { loadLinks, saveLink, type StoredLink } from './storage'
 import { ERC20_ABI, isNative, NATIVE, type Token, tokenByAddress } from './tokens'
 
@@ -317,21 +316,23 @@ export interface ChainLink {
   amountEach: bigint
   slots: number
   expiry: number
-  createdBlock: bigint
 }
 
 /**
- * Every link this address ever funded, from the contract's own events. Lets a sender see and refund
- * their links on a device that has no keys — it cannot re-share them, since the key is not on chain.
+ * Every link this address ever funded, from the contract's own per-sender list. Lets a sender see
+ * and refund their links on a device that has no keys — it cannot re-share them, since the key is
+ * not on chain. Reads are batched a few at a time; the public RPC is shared.
  */
 export async function linksFundedBy(sender: Hex): Promise<ChainLink[]> {
-  const { logs } = await escrowLogs('LinkCreated', sender)
-  return logs.map(log => ({
-    id: log.args.linkId as Hex,
-    token: tokenByAddress((log.args.token as Hex) ?? NATIVE),
-    amountEach: log.args.amountEach as bigint,
-    slots: Number(log.args.slots),
-    expiry: Number(log.args.expiry),
-    createdBlock: log.blockNumber,
-  }))
+  const ids = await rpc.readContract({ ...escrow, functionName: 'linksOf', args: [sender] })
+  const out: ChainLink[] = []
+  for (let i = 0; i < ids.length; i += CONCURRENCY) {
+    const batch = await Promise.all(ids.slice(i, i + CONCURRENCY).map(async (id) => {
+      const link = await readLink(id)
+      chainState[id] = link
+      return { id, token: link.token, amountEach: link.amountEach, slots: link.slots, expiry: link.expiry }
+    }))
+    out.push(...batch)
+  }
+  return out
 }

@@ -7,4 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_PUBLIC_URL?: string
   readonly VITE_SUPABASE_URL?: string
   readonly VITE_SUPABASE_ANON_KEY?: string
+  readonly VITE_ESCROW_DEPLOY_BLOCK?: string
+  readonly VITE_CIRCLE_CLIENT_KEY?: string
+  readonly VITE_CIRCLE_CLIENT_URL?: string
 }

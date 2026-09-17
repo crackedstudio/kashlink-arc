@@ -13,8 +13,9 @@ defineProps<{
   balance: bigint | null
   linkCount: number
   expiredCount: number
+  hasPasskey: boolean
 }>()
-const emit = defineEmits<{ connect: [wallet: DiscoveredWallet], next: [], showLinks: [], stats: [] }>()
+const emit = defineEmits<{ connect: [wallet: DiscoveredWallet], next: [], showLinks: [], stats: [], showWallet: [] }>()
 
 const steps = [
   { title: 'Put USDC or EURC in a KashLink', text: 'For one person, or a drop the first few to open it share' },
@@ -118,6 +119,9 @@ function choose(wallet: DiscoveredWallet) {
     </button>
     <button v-else-if="linkCount" class="link-btn links" @click="emit('showLinks')">
       <Icon name="link" :size="18" /> Your KashLinks ({{ linkCount }})
+    </button>
+    <button v-if="hasPasskey" class="link-btn links" @click="emit('showWallet')">
+      <Icon name="wallet" :size="18" /> Your KashLink wallet
     </button>
 
     <p v-if="!ESCROW_CONFIGURED" class="error">

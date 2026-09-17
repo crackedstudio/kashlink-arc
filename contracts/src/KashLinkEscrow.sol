@@ -18,6 +18,10 @@ pragma solidity ^0.8.30;
  * A link carries either native USDC (`token == address(0)`, 18-decimal `msg.value` units) or an
  * ERC-20 such as EURC (`token` set, the token's own decimals). The stipend is always native USDC.
  *
+ * The contract is also its own index: running totals per token, event counters, and every sender's
+ * list of links are kept in storage, so a client needs nothing but an RPC to show history and stats.
+ * On Arc those extra writes cost a fraction of a cent.
+ *
  * What the owner can do: change the fee rate (capped at 5%), the fee floor, and the treasury address,
  * and hand ownership over. What the owner cannot do: touch escrowed funds, pause claims, or change the
  * code. There is no upgrade path by design.
@@ -52,9 +56,33 @@ contract KashLinkEscrow {
     /// @notice Upper bound on slots per link. Keeps the stipend and the refund maths trivially bounded.
     uint24 public constant MAX_SLOTS = 1000;
 
+    /// @dev Lifetime counters, packed into one slot.
+    struct Counters {
+        uint64 links;
+        uint64 drops;
+        uint64 claims;
+        uint64 refunds;
+    }
+
+    /// @dev Lifetime value moved per token, in that token's units.
+    struct Totals {
+        uint128 sent;
+        uint128 claimed;
+        uint128 refunded;
+    }
+
     mapping(address linkId => Link) public links;
     /// @notice Whether `to` has already taken a slot of `linkId`. One slot per address per drop.
     mapping(address linkId => mapping(address to => bool)) public claimedBy;
+
+    Counters public counters;
+    /// @notice Lifetime totals per token (`address(0)` for native USDC). `sent` counts the amounts
+    ///         recipients can claim, not fees or stipends.
+    mapping(address token => Totals) public totals;
+    mapping(address sender => address[]) private _linksOf;
+
+    /// @notice When the contract was deployed, so a client can say "since …" without an indexer.
+    uint40 public immutable DEPLOYED_AT;
 
     address public owner;
     address public pendingOwner;
@@ -113,9 +141,22 @@ contract KashLinkEscrow {
 
     constructor(address owner_, address treasury_, uint16 feeBps_, uint96 feeMin_) {
         if (owner_ == address(0)) revert ZeroAddress();
+        DEPLOYED_AT = uint40(block.timestamp);
         owner = owner_;
         emit OwnershipTransferred(address(0), owner_);
         _setFees(feeBps_, feeMin_, treasury_);
+    }
+
+    // ---------------------------------------------------------------- reads
+
+    /// @notice Every link `sender` has funded, oldest first.
+    function linksOf(address sender) external view returns (address[] memory) {
+        return _linksOf[sender];
+    }
+
+    /// @notice How many links `sender` has funded.
+    function linkCountOf(address sender) external view returns (uint256) {
+        return _linksOf[sender].length;
     }
 
     // ---------------------------------------------------------------- quotes
@@ -186,6 +227,13 @@ contract KashLinkEscrow {
         });
         emit LinkCreated(linkId, msg.sender, token, amountEach, slots, expiry);
 
+        _linksOf[msg.sender].push(linkId);
+        counters.links++;
+        if (slots > 1) counters.drops++;
+        // amountEach is uint96 and slots ≤ MAX_SLOTS, so the total is far below 2^128.
+        // forge-lint: disable-next-line(unsafe-typecast)
+        totals[token].sent += uint128(tokenTotal - fee);
+
         _pay(address(0), linkId, uint256(STIPEND) * slots);
         if (token == address(0)) {
             if (fee != 0) _pay(address(0), treasury, fee);
@@ -211,6 +259,9 @@ contract KashLinkEscrow {
         if (remaining == 0) link.status = Status.Claimed;
         uint256 amount = link.amountEach;
         emit LinkClaimed(msg.sender, to, amount, remaining);
+        counters.claims++;
+        // forge-lint: disable-next-line(unsafe-typecast)
+        totals[link.token].claimed += uint128(amount);
 
         _pay(link.token, to, amount);
     }
@@ -225,6 +276,9 @@ contract KashLinkEscrow {
         link.status = Status.Refunded;
         uint256 amount = uint256(link.amountEach) * (link.slots - link.claimed);
         emit LinkRefunded(linkId, msg.sender, amount);
+        counters.refunds++;
+        // forge-lint: disable-next-line(unsafe-typecast)
+        totals[link.token].refunded += uint128(amount);
 
         _pay(link.token, msg.sender, amount);
     }

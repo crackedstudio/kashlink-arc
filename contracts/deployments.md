@@ -2,7 +2,30 @@
 
 ## Arc Testnet (chain 5042002)
 
-### v2 — drops and EURC (current)
+### v3 — drops, EURC, built-in index (current)
+
+| | |
+|---|---|
+| KashLinkEscrow | [`0xe16307FE8bADad783895A5c0047bEa76F152984F`](https://explorer.testnet.arc.io/address/0xe16307FE8bADad783895A5c0047bEa76F152984F) — verification pending (explorer rate limit) |
+| Deploy tx | [`0xd25f1dcb…b67c`](https://explorer.testnet.arc.io/tx/0xd25f1dcb32399c25ecc11645e8f0847d2087f0a1acd49bf9de2106c6c922b67c), block 62562869 |
+| Owner / treasury | `0x70B22b00B1a579bc005dDB0c8770E11EdC20C178` (throwaway testnet key) |
+| Fees | 1 % (100 bps), no floor |
+| Deployed | 2026-09-17 |
+
+Proof transactions:
+
+| Step | Tx |
+|---|---|
+| `create` a 3-slot USDC drop, $0.10 each, 30 s expiry | [`0x70fbc9df…ab47`](https://explorer.testnet.arc.io/tx/0x70fbc9dfc7039d14ccdd77b76b96dba697f3c9c44f7348e217813e3f2181ab47) |
+| `claim` slot 1 | [`0xf4bd0c52…a371`](https://explorer.testnet.arc.io/tx/0xf4bd0c5275950d45e58fbb564d338fd9dade576689d4b0ba77219d259040a371) |
+| `claim` slot 2 | [`0x5f70caff…dd1c`](https://explorer.testnet.arc.io/tx/0x5f70caffeb6a79e43ccf9b91581081ebe8357a5ba492acdc788d41d00744dd1c) |
+| `refund` of the unclaimed third slot after expiry ($0.10 back) | [`0xeb848b66…786f`](https://explorer.testnet.arc.io/tx/0xeb848b6631b86004ce355a57c4a0d91dcfa8b366c37e1b5cea46c537a9bb786f) |
+| EURC link create / claim | _pending testnet EURC_ |
+
+After these, `counters()` reads `(1 link, 1 drop, 2 claims, 1 refund)` and `totals(USDC)` reads
+`(0.30 sent, 0.20 claimed, 0.10 refunded)` — the stats page is those two calls.
+
+### v2 — drops and EURC (superseded by v3)
 
 | | |
 |---|---|

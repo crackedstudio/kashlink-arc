@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { addressUrl, CHAIN, ESCROW_ADDRESS, txUrl } from '../lib/arc'
 import { formatDate, shortAddress } from '../lib/format'
-import { loadStats, median, type Stats } from '../lib/stats'
+import { loadStats, type Stats } from '../lib/stats'
 import { formatAmount } from '../lib/tokens'
 import { errorMessage } from '../lib/wallet'
 import Icon from './Icon.vue'
@@ -38,8 +38,8 @@ const kindLabel = { created: 'Link created', claimed: 'Claimed', refunded: 'Retu
       Live stats
     </h1>
     <p class="subtitle muted">
-      Read straight from the escrow contract's events. No backend, no analytics — the same numbers anyone can pull from the
-      <a :href="addressUrl(ESCROW_ADDRESS)" target="_blank" rel="noopener">explorer</a>.
+      Read straight from the escrow contract, which keeps its own totals. No backend, no indexer — the same numbers anyone can
+      read on the <a :href="addressUrl(ESCROW_ADDRESS)" target="_blank" rel="noopener">explorer</a>.
     </p>
 
     <p v-if="error" class="error">
@@ -50,33 +50,28 @@ const kindLabel = { created: 'Link created', claimed: 'Claimed', refunded: 'Retu
     </p>
 
     <template v-else>
-      <p v-if="stats.partial" class="notice muted">
-        The explorer index is unreachable, so this only covers the last hour or so.
-      </p>
-
       <div class="tiles">
         <div class="tile">
           <strong>{{ stats.links }}</strong>
           <span class="muted">links created</span>
         </div>
         <div class="tile">
-          <strong>{{ stats.people }}</strong>
-          <span class="muted">people paid</span>
+          <strong>{{ stats.claims }}</strong>
+          <span class="muted">claims</span>
         </div>
         <div class="tile">
           <strong>{{ stats.drops }}</strong>
-          <span class="muted">drops · {{ stats.slots }} slots</span>
+          <span class="muted">drops</span>
         </div>
         <div class="tile">
-          <strong>{{ stats.links ? Math.round(100 * stats.fullyClaimed / stats.links) : 0 }}%</strong>
-          <span class="muted">fully claimed</span>
+          <strong>{{ stats.refunds }}</strong>
+          <span class="muted">returned to senders</span>
         </div>
       </div>
 
       <div v-for="t in stats.byToken" :key="t.token.symbol" class="card token">
         <div class="row head">
           <strong>{{ t.token.symbol }}</strong>
-          <span class="muted">{{ t.linkTotals.length }} link{{ t.linkTotals.length === 1 ? '' : 's' }}</span>
         </div>
         <div class="row">
           <span class="muted">Sent as links</span>
@@ -94,30 +89,26 @@ const kindLabel = { created: 'Link created', claimed: 'Claimed', refunded: 'Retu
           <span class="muted">Still in escrow</span>
           <strong>{{ formatAmount(t.sent - t.claimed - t.refunded, t.token) }}</strong>
         </div>
-        <div class="row">
-          <span class="muted">Median link</span>
-          <strong>{{ formatAmount(median(t.linkTotals), t.token) }}</strong>
-        </div>
       </div>
 
-      <p v-if="stats.since" class="range muted">
-        Since {{ formatDate(stats.since * 1000) }}<template v-if="stats.latest"> · last activity {{ formatDate(stats.latest * 1000) }}</template>
+      <p class="range muted">
+        Since {{ formatDate(stats.since * 1000) }}
       </p>
 
       <p class="label">
-        Recent activity
+        Last hour
       </p>
       <ul class="events card">
         <li v-for="e in stats.recent" :key="e.tx + e.kind + e.linkId">
           <span class="dot" :class="e.kind" />
           <span class="info">
             <strong>{{ kindLabel[e.kind] }}<template v-if="e.slots && e.slots > 1"> · drop for {{ e.slots }}</template></strong>
-            <span class="muted">{{ e.timestamp ? formatDate(e.timestamp * 1000) : shortAddress(e.linkId) }}</span>
+            <span class="muted">{{ e.timestamp ? formatDate(e.timestamp * 1000) : shortAddress(e.linkId) }} · {{ shortAddress(e.linkId) }}</span>
           </span>
           <a class="amount" :href="txUrl(e.tx)" target="_blank" rel="noopener">{{ formatAmount(e.amount, e.token) }} <Icon name="external" :size="12" /></a>
         </li>
         <li v-if="!stats.recent.length" class="muted empty">
-          Nothing yet.
+          Nothing in the last hour.
         </li>
       </ul>
     </template>

@@ -28,6 +28,19 @@ export const ESCROW_ABI = [
   },
   {
     "type": "function",
+    "name": "DEPLOYED_AT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint40",
+        "internalType": "uint40"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_FEE_BPS",
     "inputs": [],
     "outputs": [
@@ -105,6 +118,34 @@ export const ESCROW_ABI = [
         "name": "",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "counters",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "links",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "drops",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "claims",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "refunds",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"
@@ -189,6 +230,25 @@ export const ESCROW_ABI = [
   },
   {
     "type": "function",
+    "name": "linkCountOf",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "links",
     "inputs": [
       {
@@ -232,6 +292,25 @@ export const ESCROW_ABI = [
         "name": "status",
         "type": "uint8",
         "internalType": "enum KashLinkEscrow.Status"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "linksOf",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address[]",
+        "internalType": "address[]"
       }
     ],
     "stateMutability": "view"
@@ -336,6 +415,35 @@ export const ESCROW_ABI = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "totals",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "sent",
+        "type": "uint128",
+        "internalType": "uint128"
+      },
+      {
+        "name": "claimed",
+        "type": "uint128",
+        "internalType": "uint128"
+      },
+      {
+        "name": "refunded",
+        "type": "uint128",
+        "internalType": "uint128"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",

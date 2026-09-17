@@ -7,6 +7,7 @@ import LinksSheet from './components/LinksSheet.vue'
 import ReadySheet from './components/ReadySheet.vue'
 import ReviewScreen from './components/ReviewScreen.vue'
 import StatsScreen from './components/StatsScreen.vue'
+import WalletSheet from './components/WalletSheet.vue'
 import { track } from './lib/analytics'
 import { ESCROW_CONFIGURED } from './lib/arc'
 import {
@@ -45,6 +46,24 @@ const sendError = ref<string | null>(null)
 const links = ref<StoredLink[]>(loadLinks())
 const readyLink = ref<StoredLink | null>(null)
 const showLinks = ref(false)
+const showWallet = ref(false)
+/** A passkey wallet was made on this device (the credential is in localStorage). */
+const hasPasskey = ref(hasSavedPasskey())
+
+function hasSavedPasskey(): boolean {
+  try {
+    return !!localStorage.getItem('kashlink-arc-passkey')
+  }
+  catch {
+    return false
+  }
+}
+
+function openWallet() {
+  finishClaim()
+  hasPasskey.value = true
+  showWallet.value = true
+}
 const expiredCount = computed(() => links.value.filter(l => chainState[l.id] && isExpired(chainState[l.id])).length)
 const quote = computed(() => (fees.value ? quoteWith(fees.value, token.value, amount.value, slots.value) : null))
 
@@ -195,13 +214,13 @@ function finishClaim() {
 </script>
 
 <template>
-  <ClaimScreen v-if="screen === 'claim' && claimLink" :key="claimLink.key" :link-key="claimLink.key" :message="claimLink.message" @done="finishClaim" />
+  <ClaimScreen v-if="screen === 'claim' && claimLink" :key="claimLink.key" :link-key="claimLink.key" :message="claimLink.message" @done="finishClaim" @open-wallet="openWallet" />
   <StatsScreen v-else-if="screen === 'stats'" @back="leaveStats" />
   <IntroScreen
     v-else-if="screen === 'intro'"
     :wallet :connecting :wallet-error :balance="usdcBalance"
-    :link-count="links.length" :expired-count="expiredCount"
-    @connect="connectWallet" @next="startCreate" @show-links="showLinks = true" @stats="showStats"
+    :link-count="links.length" :expired-count="expiredCount" :has-passkey="hasPasskey"
+    @connect="connectWallet" @next="startCreate" @show-links="showLinks = true" @stats="showStats" @show-wallet="showWallet = true"
   />
   <AmountScreen
     v-else-if="screen === 'amount'" :token :balance :usdc-balance :fees :slots :expiry-seconds="expirySeconds"
@@ -215,4 +234,5 @@ function finishClaim() {
 
   <LinksSheet v-if="showLinks" :links :wallet @connect="connectWallet" @open="openLink" @changed="links = loadLinks()" @close="showLinks = false" />
   <ReadySheet v-if="readyLink" :key="readyLink.id" :link="readyLink" :wallet @connect="connectWallet" @close="closeReady" />
+  <WalletSheet v-if="showWallet" @close="showWallet = false" @forgotten="showWallet = false; hasPasskey = false" />
 </template>

@@ -83,6 +83,7 @@ contract KashLinkEscrowTest is Test {
     uint256 internal constant EUR = 1e6;
 
     function setUp() public {
+        vm.warp(1_700_000_000);
         escrow = new KashLinkEscrow(owner, treasury, FEE_BPS, 0);
         eurc = new MockToken();
         linkId = vm.addr(linkKey);
@@ -90,7 +91,6 @@ contract KashLinkEscrowTest is Test {
         eurc.mint(sender, 1_000 * EUR);
         vm.prank(sender);
         eurc.approve(address(escrow), type(uint256).max);
-        vm.warp(1_700_000_000);
     }
 
     function _expiry() internal view returns (uint40) {
@@ -518,6 +518,53 @@ contract KashLinkEscrowTest is Test {
         escrow.refund(linkId);
         vm.stopPrank();
         assertEq(address(escrow).balance, 10 ether);
+    }
+
+    // ------------------------------------------------------------ the built-in index
+
+    function test_index_countersTotalsAndLinksOf() public {
+        assertEq(escrow.DEPLOYED_AT(), uint40(block.timestamp));
+        address a = vm.addr(11);
+        address b = vm.addr(12);
+        _createAs(sender, a, NATIVE, 2 ether, 3); // drop, total 6
+        _createAs(sender, b, NATIVE, 5 ether, 1); // single
+        _createAs(sender, linkId, address(eurc), uint96(10 * EUR), 2);
+
+        (uint64 links_, uint64 drops, uint64 claims, uint64 refunds) = escrow.counters();
+        assertEq(links_, 3);
+        assertEq(drops, 2);
+        assertEq(claims, 0);
+        assertEq(refunds, 0);
+        (uint128 sent, uint128 claimedT, uint128 refundedT) = escrow.totals(NATIVE);
+        assertEq(sent, 11 ether, "amounts only, no fees or stipends");
+        assertEq(claimedT, 0);
+        assertEq(refundedT, 0);
+        (sent,,) = escrow.totals(address(eurc));
+        assertEq(sent, 20 * EUR);
+
+        address[] memory mine = escrow.linksOf(sender);
+        assertEq(mine.length, 3);
+        assertEq(mine[0], a);
+        assertEq(mine[1], b);
+        assertEq(mine[2], linkId);
+        assertEq(escrow.linkCountOf(sender), 3);
+        assertEq(escrow.linkCountOf(recipient), 0);
+
+        vm.prank(a);
+        escrow.claim(recipient);
+        vm.prank(b);
+        escrow.claim(recipient);
+        vm.warp(block.timestamp + WEEK);
+        vm.prank(sender);
+        escrow.refund(a);
+
+        (links_, drops, claims, refunds) = escrow.counters();
+        assertEq(claims, 2);
+        assertEq(refunds, 1);
+        (sent, claimedT, refundedT) = escrow.totals(NATIVE);
+        assertEq(claimedT, 7 ether);
+        assertEq(refundedT, 4 ether, "two unclaimed slots of the drop");
+        assertEq(sent - claimedT - refundedT, 0, "nothing left in escrow for USDC");
     }
 
     // ------------------------------------------------------------ invariants

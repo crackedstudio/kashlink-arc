@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import QRCode from 'qrcode'
 import { computed, onMounted, ref, watch } from 'vue'
 import { track } from '../lib/analytics'
 import { txUrl } from '../lib/arc'
@@ -44,7 +43,10 @@ onMounted(() => {
 })
 
 watch(showQr, async (on) => {
-  if (on && !qrSvg.value) qrSvg.value = await QRCode.toString(url.value, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' })
+  if (!on || qrSvg.value) return
+  // The QR library is loaded only when someone asks for a code.
+  const { default: QRCode } = await import('qrcode')
+  qrSvg.value = await QRCode.toString(url.value, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' })
 })
 
 async function copy() {
