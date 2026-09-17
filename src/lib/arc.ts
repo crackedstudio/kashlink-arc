@@ -15,15 +15,21 @@ const NETWORK: 'mainnet' | 'testnet' = (import.meta.env.VITE_ARC_NETWORK
   || (import.meta.env.DEV ? 'testnet' : 'mainnet')) as 'mainnet' | 'testnet'
 export const IS_MAINNET = NETWORK === 'mainnet'
 
-// viem's testnet entry predates the launch and still points at arc.network / arcscan; the current
-// endpoints are the ones in docs.arc.io.
+// viem's entries are not trusted for endpoints: the testnet one predates the launch (arc.network,
+// arcscan) and, in the version pinned by the wallet SDK, the mainnet one has no RPC or explorer at
+// all. Both come from docs.arc.io/integrate/connect-to-arc.
+const mainnet: Chain = {
+  ...arc,
+  rpcUrls: { default: { http: ['https://rpc.mainnet.arc.io'] } },
+  blockExplorers: { default: { name: 'Arc Explorer', url: 'https://explorer.arc.io' } },
+}
 const testnet: Chain = {
   ...arcTestnet,
   rpcUrls: { default: { http: ['https://rpc.testnet.arc.io'] } },
   blockExplorers: { default: { name: 'Arc Testnet Explorer', url: 'https://explorer.testnet.arc.io' } },
 }
 
-export const CHAIN: Chain = IS_MAINNET ? arc : testnet
+export const CHAIN: Chain = IS_MAINNET ? mainnet : testnet
 export const EXPLORER_URL = CHAIN.blockExplorers!.default.url
 
 export const rpc = createPublicClient({
