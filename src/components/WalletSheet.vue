@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { type Hex, isAddress } from 'viem'
 import { computed, onMounted, ref } from 'vue'
-import { addressUrl, txUrl } from '../lib/arc'
+import { addressUrl, IS_MAINNET, txUrl } from '../lib/arc'
 import { shortAddress } from '../lib/format'
 import type { PasskeyWallet } from '../lib/passkey'
 import { formatAmount, getTokenBalance, parseAmount, type Token, TOKENS, USDC } from '../lib/tokens'
@@ -15,6 +15,8 @@ import Icon from './Icon.vue'
  */
 const emit = defineEmits<{ close: [], forgotten: [] }>()
 
+/** Mirrors passkey.ts, which is only imported on demand. */
+const sponsored = import.meta.env.VITE_CIRCLE_SPONSOR_GAS ? import.meta.env.VITE_CIRCLE_SPONSOR_GAS === 'true' : !IS_MAINNET
 const wallet = ref<PasskeyWallet | null>(null)
 const balances = ref<Map<Token, bigint>>(new Map())
 const opening = ref(true)
@@ -128,7 +130,7 @@ async function forget() {
         <input v-model="to" class="field mono" type="text" placeholder="0x… address on Arc" autocomplete="off" spellcheck="false">
         <input v-model="amount" class="field" type="text" inputmode="decimal" :placeholder="`Amount in ${token.symbol}`" autocomplete="off">
         <p class="hint muted">
-          Gas comes out of the wallet's USDC. The first send also sets the wallet up on chain, which costs a few cents more.
+          {{ sponsored ? 'No gas to pay: KashLink covers it.' : 'Gas comes out of the wallet\'s USDC. Keep about 0.20 USDC beyond what you send; most of it comes back.' }}
         </p>
         <a v-if="sentTx" class="link-btn tx" :href="txUrl(sentTx)" target="_blank" rel="noopener">
           Sent — view transaction <Icon name="external" :size="14" />
