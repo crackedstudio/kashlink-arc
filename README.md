@@ -17,7 +17,8 @@ chain where USDC is the gas token, a throwaway link can pay for its own claim.
 | **Drops** | one link, up to 100 people, first come first served, one slot per address |
 | **Notes and QR** | a message rides in the link (never on a server); a QR for in-person handoff |
 | **Returns** | anything unclaimed comes back to the sender after 1, 7 or 30 days — from any device |
-| **Live stats** | `/stats` reads every link ever made from the contract's events; no backend |
+| **No wallet? No problem** | a recipient can create a passkey wallet on the spot (Circle Modular Wallets) and claim into it |
+| **Live stats** | `/stats` reads totals the contract keeps itself; no backend, no indexer |
 
 ---
 
@@ -69,10 +70,16 @@ dependencies, 39 Foundry tests including reentrancy, ERC-20 failure modes and fe
 | `create(id, token, amountEach, slots, expiry)` payable | escrow the total; fee → treasury; one stipend per slot → `id` |
 | `claim(to)` | `msg.sender` must be the link id; one slot per `to`; pays `amountEach`; any time while pending |
 | `refund(id)` | sender only, after `expiry`; returns `amountEach × unclaimed slots` |
+| `linksOf(sender)`, `counters()`, `totals(token)`, `DEPLOYED_AT` | the contract's own index: per-sender link lists, lifetime counts and per-token totals |
 | `setFees(bps, min, treasury)` | owner; `bps ≤ 500` |
 
 What the owner **cannot** do: touch escrowed funds, pause, or upgrade. There is no proxy. A claim
 and a refund on the same link cannot both succeed.
+
+The contract is its own index because nothing else on Arc can be: the public RPC caps `eth_getLogs`
+at a few thousand blocks and the explorer API is rate-limited (and Cloudflare-challenged on
+mainnet). A few extra `SSTORE`s per operation cost a fraction of a cent here, and the stats page and
+cross-device history become plain `view` calls.
 
 USDC links are native 18-decimal wei — `msg.value`, `eth_getBalance`; the app never calls the
 6-decimal ERC-20 view at `0x3600…0000`, so the two can't be confused. EURC is a normal 6-decimal
@@ -108,8 +115,8 @@ src/
     tokens.ts              USDC (native) and EURC (ERC-20): formatting, balances
     wallet.ts              EIP-6963 wallet discovery, add/switch to Arc
     links.ts               link model: keys, URLs, notes, quotes, create / claim / refund, status
-    explorer.ts            event history from the explorer's log index (RPC caps getLogs ranges)
-    stats.ts               the /stats aggregation
+    passkey.ts             Circle Modular Wallets: passkey wallet for recipients (loaded on demand)
+    stats.ts               the /stats page, from the contract's counters and totals
     storage.ts             localStorage — link keys live here so links can be re-shared
     format.ts              dates, addresses, countdowns
     analytics.ts           usage events (never reads the URL; see the note in the file)
@@ -149,6 +156,7 @@ All `VITE_` variables are baked in at build time. See [`.env.example`](.env.exam
 | `VITE_PUBLIC_URL` | Public URL that shared links point at. |
 | `VITE_ARC_RPC_URL` | Override the public RPC. |
 | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Analytics. Unset ⇒ nothing is recorded. |
+| `VITE_CIRCLE_CLIENT_KEY` | Circle Console client key. Unset ⇒ the passkey-wallet option is hidden. |
 
 ## Deployment
 

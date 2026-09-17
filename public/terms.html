@@ -149,16 +149,17 @@
         <ul>
           <li><strong>A KashLink is cash.</strong> Whoever holds the link can claim the money. There is no account, no password and no way to recover a link that is lost, leaked or claimed by someone else.</li>
           <li><strong>Your USDC sits in a smart contract on Arc, not with us.</strong> The KashLink escrow contract is open source and verified. We cannot move, freeze or reverse anything in it. Only the link holder (to claim) and the sender (to take an expired link back) can move funds.</li>
-          <li><strong>Links cost 1% plus $0.01 of prepaid claim gas</strong>, paid by the sender on top of the amount, and charged whether the link is claimed or taken back.</li>
+          <li><strong>Links cost 1% plus $0.01 of prepaid claim gas per person</strong>, paid by the sender on top of the amount, and charged whether the link is claimed or taken back.</li>
+          <li><strong>A drop is a link several people share.</strong> Each address can take one share; whatever is unclaimed at expiry goes back to the sender.</li>
           <li><strong>Blockchain transactions are final.</strong> Check the amount and, when claiming, the receiving address before you confirm.</li>
           <li><strong>An unclaimed link can be taken back after it expires</strong> — by the wallet that created it, from any device.</li>
         </ul>
       </section>
 
-      <p style="margin-top: 24px;">These Terms and Conditions (the <strong>"Terms"</strong>) govern your use of KashLink, a web app that lets you send USDC on the Arc blockchain as a shareable link (the <strong>"Service"</strong>). The Service is operated by Cracked Studios Ltd, a company incorporated in the Federal Republic of Nigeria (<strong>"we"</strong>, <strong>"us"</strong>, <strong>"our"</strong>). By creating, opening or claiming a KashLink, or otherwise using the Service, you agree to these Terms. If you do not agree, do not use the Service.</p>
+      <p style="margin-top: 24px;">These Terms and Conditions (the <strong>"Terms"</strong>) govern your use of KashLink, a web app that lets you send USDC or EURC on the Arc blockchain as a shareable link (the <strong>"Service"</strong>). The Service is operated by Cracked Studios Ltd, a company incorporated in the Federal Republic of Nigeria (<strong>"we"</strong>, <strong>"us"</strong>, <strong>"our"</strong>). By creating, opening or claiming a KashLink, or otherwise using the Service, you agree to these Terms. If you do not agree, do not use the Service.</p>
 
       <h2><small>1.</small> What KashLink is</h2>
-      <p>KashLink is a piece of software. It turns an amount of <strong>USDC on Arc</strong> — Circle's blockchain, on which USDC is also the currency used to pay network fees — into a link that anyone holding it can claim.</p>
+      <p>KashLink is a piece of software. It turns an amount of <strong>USDC or EURC on Arc</strong> — Circle's blockchain, on which USDC is also the currency used to pay network fees — into a link that anyone holding it can claim. A link can be for one person, or a <strong>drop</strong> that a chosen number of people share, one share per address, first come first served.</p>
       <p>KashLink is <strong>non-custodial</strong>. Every link is a freshly generated key pair created in your browser. The private key is placed in the link itself; its address identifies the link in the <strong>KashLink escrow contract</strong>, a smart contract deployed on Arc whose source code is published and verified on the Arc block explorer. When you create a link, your wallet deposits the USDC into that contract. When the link is claimed, the contract pays the USDC to the address the link holder names. We do not receive, store, hold or have access to the key, to the funds in the contract, or to your wallet.</p>
       <p>The contract has an owner (us) whose only powers are to change the fee rate (capped at 5%), the fee floor and the address fees are paid to. The owner <strong>cannot</strong> withdraw escrowed funds, block or reverse a claim or a refund, pause the contract or change its code. There is no upgrade mechanism.</p>
       <p>KashLink does not hold balances, offer accounts, convert currencies or move funds on anyone's behalf. Every transaction is signed by a key that you or the link holder controls and is broadcast directly to the Arc network. Nothing in the Service is financial, investment, legal or tax advice.</p>
@@ -207,6 +208,8 @@
         <li>the contract is <strong>immutable</strong>. Its address and verified source code are published in the app's repository and on the Arc block explorer, and you can read exactly what it does before you use it;</li>
         <li>a claim is paid to whatever address the link holder names. The contract cannot tell a right address from a wrong one. <strong>USDC sent to an address you do not control is lost</strong>;</li>
         <li>the contract will refuse to pay an address that the Arc network's blocklist prohibits, and a claim or refund to such an address will fail;</li>
+        <li>the contract records, publicly, the address of every link, its amount, the sender's address and running totals. None of that can be used to claim: claiming requires the private key, which exists only in the link;</li>
+        <li>EURC is an ordinary token contract issued by Circle; a EURC link's claim gas is still paid in USDC from the link's stipend;</li>
         <li>smart contracts can contain bugs. The contract has automated tests but has not been independently audited. Do not put more into a link than you are prepared to lose.</li>
       </ul>
 
@@ -243,6 +246,7 @@
         <li>the <strong>Arc blockchain</strong>, its validators and the public RPC nodes that serve it;</li>
         <li><strong>USDC</strong>, issued and controlled by Circle;</li>
         <li>injected <strong>EVM wallets</strong> such as MetaMask or Rabby, which sign your transactions;</li>
+        <li><strong>Circle Modular Wallets</strong>, if you choose to create a passkey wallet on the claim screen. That wallet is a smart contract account controlled by a passkey stored by your device or browser; Circle's terms apply to it, and losing the passkey means losing access to the wallet. We hold no key to it and cannot recover it;</li>
         <li><strong>Supabase</strong>, which hosts the analytics table; and</li>
         <li><strong>Vercel</strong>, which hosts the app.</li>
       </ul>
@@ -253,7 +257,9 @@
       <ul>
         <li><strong>Keys never leave your device.</strong> The link's private key travels in the URL fragment (<code>#…</code>), which browsers do not send to servers, and is stored only in local storage on your device.</li>
         <li><strong>No accounts, no personal details.</strong> We do not ask for your name, email, phone number or wallet address, and we do not collect them.</li>
-        <li><strong>Usage analytics.</strong> When analytics are enabled, the app records, for each link created, claimed or returned: the event type, the amount, the link's <em>public</em> address (which cannot be used to spend the funds) and a random identifier generated on your device that is not tied to a person or a wallet. The app never records the page URL, the link key or your wallet address.</li>
+        <li><strong>Usage analytics.</strong> When analytics are enabled, the app records, for each link created, claimed or returned: the event type, the amount, the link's <em>public</em> address (which cannot be used to spend the funds) and a random identifier generated on your device that is not tied to a person or a wallet. The app never records the page URL, the link key, the note on a link, or your wallet address.</li>
+        <li><strong>Notes on links</strong> travel inside the link itself, in the part of the URL that browsers never send to servers. Whoever has the link can read the note; nobody else can.</li>
+        <li><strong>Passkey wallets.</strong> If you create one, its credential (a public key and an identifier, not a secret) is kept in your browser's local storage so the wallet can be reopened on this device, and Circle's service sees the wallet's address and transactions.</li>
         <li><strong>Blockchains are public.</strong> Every deposit, claim and refund is permanently and publicly recorded on Arc, together with the addresses involved, and can be read by anyone.</li>
         <li><strong>Hosting and networking.</strong> Our hosting provider and the RPC nodes the app contacts may receive your IP address and standard request metadata as part of serving the app.</li>
       </ul>
