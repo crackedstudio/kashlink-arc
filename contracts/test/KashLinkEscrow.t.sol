@@ -368,7 +368,7 @@ contract KashLinkEscrowTest is Test {
             uint256 total = escrow.totalFor(amount);
             vm.prank(sender);
             escrow.create{value: total}(id, amount, uint64(block.timestamp) + WEEK);
-            if (mask & (1 << i) != 0) {
+            if ((mask >> i) & 1 == 1) {
                 vm.prank(id);
                 escrow.claim(recipient);
             } else {

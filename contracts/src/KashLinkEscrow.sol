@@ -86,7 +86,7 @@ contract KashLinkEscrow {
     modifier nonReentrant() {
         _enter();
         _;
-        _entered = 1;
+        _exit();
     }
 
     constructor(address owner_, address treasury_, uint16 feeBps_, uint96 feeMin_) {
@@ -194,6 +194,10 @@ contract KashLinkEscrow {
     function _enter() private {
         if (_entered != 1) revert Reentrancy();
         _entered = 2;
+    }
+
+    function _exit() private {
+        _entered = 1;
     }
 
     function _setFees(uint16 feeBps_, uint96 feeMin_, address treasury_) private {
