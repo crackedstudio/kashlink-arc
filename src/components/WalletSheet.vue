@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import { addressUrl, IS_MAINNET, txUrl } from '../lib/arc'
 import { shortAddress } from '../lib/format'
 import type { PasskeyWallet } from '../lib/passkey'
+import { cachedAddress, cachedBalances, rememberBalances } from '../lib/passkey-cache'
 import { formatAmount, getTokenBalance, parseAmount, type Token, TOKENS, USDC } from '../lib/tokens'
 import { copyText } from '../lib/clipboard'
 import { errorMessage } from '../lib/wallet'
@@ -18,7 +19,10 @@ const emit = defineEmits<{ close: [], forgotten: [] }>()
 /** Mirrors passkey.ts, which is only imported on demand. */
 const sponsored = import.meta.env.VITE_CIRCLE_SPONSOR_GAS ? import.meta.env.VITE_CIRCLE_SPONSOR_GAS === 'true' : !IS_MAINNET
 const wallet = ref<PasskeyWallet | null>(null)
-const balances = ref<Map<Token, bigint>>(new Map())
+/** Known before the SDK loads when this device has opened the wallet before; balances need only this. */
+const address = ref<Hex | null>(cachedAddress())
+/** The last balances seen, until fresh ones arrive. */
+const balances = ref<Map<Token, bigint>>(address.value ? cachedBalances(address.value) : new Map())
 const opening = ref(true)
 const error = ref<string | null>(null)
 
@@ -39,17 +43,30 @@ const units = computed(() => {
 })
 const canSend = computed(() => !!wallet.value && isAddress(to.value.trim()) && units.value > 0n && units.value <= (balances.value.get(token.value) ?? 0n))
 
-async function loadBalances() {
-  if (!wallet.value) return
-  const entries = await Promise.all(TOKENS.map(async t => [t, await getTokenBalance(t, wallet.value!.address)] as const))
-  balances.value = new Map(entries)
+async function loadBalances(of: Hex) {
+  try {
+    const entries = await Promise.all(TOKENS.map(async t => [t, await getTokenBalance(t, of)] as const))
+    if (address.value !== of) return
+    balances.value = new Map(entries)
+    rememberBalances(of, balances.value)
+  }
+  catch {
+    // keep showing the last known balances; the next open or send refreshes them
+  }
 }
 
 onMounted(async () => {
+  // Balances come straight from the chain, so with a known address they load alongside the SDK
+  // instead of after it. The SDK (download, then a round trip to Circle) is only needed to send.
+  if (address.value) loadBalances(address.value)
   try {
     const { openPasskeyWallet } = await import('../lib/passkey')
     wallet.value = await openPasskeyWallet()
-    await loadBalances()
+    if (address.value !== wallet.value.address) {
+      address.value = wallet.value.address
+      balances.value = new Map()
+      await loadBalances(wallet.value.address)
+    }
   }
   catch (e) {
     error.value = errorMessage(e)
@@ -60,8 +77,8 @@ onMounted(async () => {
 })
 
 async function copy() {
-  if (!wallet.value) return
-  await copyText(wallet.value.address)
+  if (!address.value) return
+  await copyText(address.value)
   copied.value = true
   setTimeout(() => (copied.value = false), 2000)
 }
@@ -74,7 +91,7 @@ async function send() {
     const { sendFromPasskey } = await import('../lib/passkey')
     sentTx.value = await sendFromPasskey(wallet.value, token.value, to.value.trim() as Hex, units.value)
     amount.value = ''
-    await loadBalances()
+    await loadBalances(wallet.value.address)
   }
   catch (e) {
     error.value = errorMessage(e)
@@ -100,21 +117,21 @@ async function forget() {
         A wallet on Arc that your passkey controls. Only this device and your passkey can move what's in it.
       </p>
 
-      <p v-if="opening" class="loading muted">
+      <p v-if="opening && !address" class="loading muted">
         <span class="spinner" /> Opening with your passkey…
       </p>
       <p v-if="error" class="error">
         {{ error }}
       </p>
 
-      <template v-if="wallet">
-        <button class="address" :title="wallet.address" :aria-label="copied ? 'Address copied' : 'Copy your wallet address'" @click="copy">
-          <span class="mono">{{ copied ? 'Address copied' : shortAddress(wallet.address) }}</span>
+      <template v-if="address">
+        <button class="address" :title="address" :aria-label="copied ? 'Address copied' : 'Copy your wallet address'" @click="copy">
+          <span class="mono">{{ copied ? 'Address copied' : shortAddress(address) }}</span>
           <Icon :name="copied ? 'check' : 'copy'" :size="16" />
         </button>
         <div class="balances">
           <div v-for="t in TOKENS" :key="t.symbol" class="tile">
-            <strong>{{ formatAmount(balances.get(t) ?? 0n, t) }}</strong>
+            <strong>{{ balances.has(t) ? formatAmount(balances.get(t)!, t) : '…' }}</strong>
             <span class="muted">{{ t.symbol }}</span>
           </div>
         </div>
@@ -136,7 +153,10 @@ async function forget() {
           Sent — view transaction <Icon name="external" :size="14" />
         </a>
         <button class="btn btn-primary" :disabled="!canSend || sending" @click="send">
-          <template v-if="sending">
+          <template v-if="!wallet && opening">
+            <span class="spinner" /> Getting your wallet ready…
+          </template>
+          <template v-else-if="sending">
             <span class="spinner" /> Confirm with your passkey…
           </template>
           <template v-else>
@@ -144,7 +164,7 @@ async function forget() {
           </template>
         </button>
         <p class="foot muted">
-          <a :href="addressUrl(wallet.address)" target="_blank" rel="noopener">View on explorer</a> ·
+          <a :href="addressUrl(address)" target="_blank" rel="noopener">View on explorer</a> ·
           <button class="link-btn inline" @click="forget">
             Forget on this device
           </button>

@@ -14,6 +14,7 @@ import {
   chainState, createLink, EXPIRY_OPTIONS, feeParams, type FeeParams, isExpired, newLink,
   type NewLink, parseHash, type ParsedHash, quoteWith, refreshStatuses,
 } from './lib/links'
+import { hasSavedPasskey } from './lib/passkey-cache'
 import { loadLinks, removeLink, saveLink, type StoredLink } from './lib/storage'
 import { getTokenBalance, type Token, USDC } from './lib/tokens'
 import { type Connected, connect, connected, type DiscoveredWallet, errorMessage, isUserRejection } from './lib/wallet'
@@ -49,15 +50,6 @@ const showLinks = ref(false)
 const showWallet = ref(false)
 /** A passkey wallet was made on this device (the credential is in localStorage). */
 const hasPasskey = ref(hasSavedPasskey())
-
-function hasSavedPasskey(): boolean {
-  try {
-    return !!localStorage.getItem('kashlink-arc-passkey')
-  }
-  catch {
-    return false
-  }
-}
 
 const openingPasskey = ref(false)
 
@@ -102,6 +94,13 @@ const expiredCount = computed(() => links.value.filter(l => chainState[l.id] && 
 const quote = computed(() => (fees.value ? quoteWith(fees.value, token.value, amount.value, slots.value) : null))
 
 onMounted(() => {
+  // Someone with a passkey wallet will likely open it; fetch the SDK (a third of the app) while idle,
+  // so the wallet is ready to send by the time they tap.
+  if (hasPasskey.value) {
+    const preload = () => import('./lib/passkey').catch(() => {})
+    if ('requestIdleCallback' in window) requestIdleCallback(preload)
+    else setTimeout(preload, 1500)
+  }
   // Opening another KashLink while one is already open only changes the #hash, without a reload.
   window.addEventListener('hashchange', () => {
     const parsed = parseHash(location.hash)

@@ -8,6 +8,7 @@ import {
 import { createPublicClient, encodeFunctionData, type Hex } from 'viem'
 import { createBundlerClient, type P256Credential, type SmartAccount, toWebAuthnAccount } from 'viem/account-abstraction'
 import { CHAIN, IS_MAINNET } from './arc'
+import { CREDENTIAL_KEY, forgetCachedWallet, rememberAddress } from './passkey-cache'
 import { ERC20_ABI, formatAmount, isNative, type Token, USDC } from './tokens'
 import type { Call, Connected } from './wallet'
 
@@ -36,7 +37,6 @@ const CLIENT_URL = import.meta.env.VITE_CIRCLE_CLIENT_URL || 'https://modular-sd
 export const PASSKEYS_ENABLED = !!CLIENT_KEY
 export const SPONSORED = import.meta.env.VITE_CIRCLE_SPONSOR_GAS ? import.meta.env.VITE_CIRCLE_SPONSOR_GAS === 'true' : !IS_MAINNET
 
-const STORAGE_KEY = 'kashlink-arc-passkey'
 
 export interface PasskeyWallet {
   address: Hex
@@ -88,12 +88,13 @@ async function accountFor(credential: P256Credential): Promise<PasskeyWallet> {
   const { modular } = transports()
   const client = createPublicClient({ chain: CHAIN, transport: modular })
   const account = await toCircleSmartAccount({ client, owner: toWebAuthnAccount({ credential }) })
+  rememberAddress(account.address)
   return { address: account.address, account }
 }
 
 function remember(credential: P256Credential) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(credential))
+    localStorage.setItem(CREDENTIAL_KEY, JSON.stringify(credential))
   }
   catch {
     // private mode: the wallet works for this session only
@@ -103,7 +104,7 @@ function remember(credential: P256Credential) {
 /** The credential saved on this device, if any. */
 export function savedCredential(): P256Credential | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(CREDENTIAL_KEY)
     return raw ? JSON.parse(raw) as P256Credential : null
   }
   catch {
@@ -112,8 +113,9 @@ export function savedCredential(): P256Credential | null {
 }
 
 export function forgetPasskey() {
+  forgetCachedWallet()
   try {
-    localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(CREDENTIAL_KEY)
   }
   catch {
     // nothing to forget

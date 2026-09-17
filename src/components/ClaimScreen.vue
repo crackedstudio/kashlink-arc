@@ -5,6 +5,7 @@ import { track } from '../lib/analytics'
 import { CHAIN, ESCROW_CONFIGURED, txUrl } from '../lib/arc'
 import { shortAddress } from '../lib/format'
 import { claimLink, hasClaimed, linkGasBalance, linkIdOf, type OnChainLink, readLink } from '../lib/links'
+import { hasSavedPasskey } from '../lib/passkey-cache'
 import { formatAmount } from '../lib/tokens'
 import { connect, discoverWallets, errorMessage } from '../lib/wallet'
 import CopyAddress from './CopyAddress.vue'
@@ -41,14 +42,7 @@ const manual = ref(false)
 /** Set when the payout went to the passkey wallet. */
 const toPasskey = ref(false)
 /** A passkey wallet already lives on this device; claim into it rather than making a second one. */
-const hasPasskey = (() => {
-  try {
-    return !!localStorage.getItem('kashlink-arc-passkey')
-  }
-  catch {
-    return false
-  }
-})()
+const hasPasskey = hasSavedPasskey()
 const creating = ref(false)
 let pollTimer: number | undefined
 
