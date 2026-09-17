@@ -5,8 +5,10 @@ import { track } from '../lib/analytics'
 import { CHAIN, ESCROW_CONFIGURED, txUrl } from '../lib/arc'
 import { shortAddress } from '../lib/format'
 import { claimLink, hasClaimed, linkGasBalance, linkIdOf, type OnChainLink, readLink } from '../lib/links'
+import { hasSavedPasskey } from '../lib/passkey-cache'
 import { formatAmount } from '../lib/tokens'
 import { connect, discoverWallets, errorMessage } from '../lib/wallet'
+import CopyAddress from './CopyAddress.vue'
 import Icon from './Icon.vue'
 import Logo from './Logo.vue'
 
@@ -41,14 +43,7 @@ const manual = ref(false)
 const toPasskey = ref(false)
 const newWallet = ref(false)
 /** A passkey wallet already lives on this device; claim into it rather than making a second one. */
-const hasPasskey = (() => {
-  try {
-    return !!localStorage.getItem('kashlink-arc-passkey')
-  }
-  catch {
-    return false
-  }
-})()
+const hasPasskey = hasSavedPasskey()
 const creating = ref(false)
 let pollTimer: number | undefined
 
@@ -242,11 +237,11 @@ async function claim() {
         take it back, and send a new one.
       </p>
       <p v-else-if="state === 'success' && toPasskey" class="status muted">
-        {{ amount }} in {{ token?.symbol }} is in your {{ newWallet ? 'new ' : '' }}KashLink wallet, <strong>{{ shortAddress(to.trim()) }}</strong>.
+        {{ amount }} in {{ token?.symbol }} is in your {{ newWallet ? 'new ' : '' }}KashLink wallet, <CopyAddress :address="to.trim()" />.
         Your passkey controls it; open it any time from the home screen.
       </p>
       <p v-else-if="state === 'success'" class="status muted">
-        {{ amount }} in {{ token?.symbol }} is now in <strong>{{ shortAddress(to.trim()) }}</strong> on {{ CHAIN.name }}.
+        {{ amount }} in {{ token?.symbol }} is now in <CopyAddress :address="to.trim()" /> on {{ CHAIN.name }}.
       </p>
       <p v-else-if="state === 'claimed'" class="status muted">
         {{ isDrop ? `All ${link!.slots} slots have been claimed.` : `The ${token?.symbol} was already taken out of this link.` }}

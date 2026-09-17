@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { formatUnits, type Hex, isAddress } from 'viem'
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
-import { gasReserve, txUrl } from '../lib/arc'
+import { gasReserve, PASSKEY_GAS_SPONSORED as sponsored, txUrl } from '../lib/arc'
+import { copyText } from '../lib/clipboard'
 import { formatUsdc } from '../lib/format'
 import type { PasskeyWallet } from '../lib/passkey'
+import { cachedAddress, cachedBalances, rememberBalances } from '../lib/passkey-cache'
 import { formatAmount, getTokenBalance, isNative, parseAmount, type Token, TOKENS, USDC } from '../lib/tokens'
 import { errorMessage } from '../lib/wallet'
 import AccountCard from './AccountCard.vue'
@@ -16,7 +18,10 @@ import Icon from './Icon.vue'
 const emit = defineEmits<{ close: [], forgotten: [] }>()
 
 const wallet = shallowRef<PasskeyWallet | null>(null) // the SDK account inside must not be proxied
-const balances = ref<Map<Token, bigint>>(new Map())
+/** Known before the SDK loads when this device has opened the wallet before; balances need only this. */
+const address = ref<Hex | null>(cachedAddress())
+/** The last balances seen, until fresh ones arrive. */
+const balances = ref<Map<Token, bigint>>(address.value ? cachedBalances(address.value) : new Map())
 const opening = ref(true)
 const error = ref<string | null>(null)
 
@@ -54,8 +59,7 @@ const max = computed(() => {
 
 /** Why the send cannot go yet, in words — or null when it can. Checked before the passkey is asked. */
 const blocker = computed(() => {
-  if (!wallet.value) return null
-  if (!amount.value) return null
+  if (!address.value || !amount.value) return null
   if (units.value < 0n) return `Enter the amount as a plain number, like 5 or 2.50.`
   if (units.value === 0n) return null
   const have = formatAmount(held.value, token.value)
@@ -63,29 +67,44 @@ const blocker = computed(() => {
     if (units.value > max.value) {
       return held.value === 0n
         ? 'This wallet has no USDC to send.'
-        : `Not enough USDC: you have ${have}, and about ${formatUsdc(reserve.value)} of it is kept for the network fee. Max is ${formatAmount(max.value, token.value)}.`
+        : sponsored
+          ? `Not enough USDC: you have ${have}.`
+          : `Not enough USDC: you have ${have}, and about ${formatUsdc(reserve.value)} of it must stay as the gas prefund (most of it comes back). Max is ${formatAmount(max.value, token.value)}.`
     }
     return null
   }
   if (units.value > held.value) return `Not enough ${token.value.symbol}: you have ${have}.`
-  if ((usdc.value ?? 0n) < reserve.value) return `Sending ${token.value.symbol} needs about ${formatUsdc(reserve.value)} of USDC for gas, and this wallet has ${formatUsdc(usdc.value ?? 0n)}. Receive a little USDC first.`
+  if ((usdc.value ?? 0n) < reserve.value) return `Sending ${token.value.symbol} needs about ${formatUsdc(reserve.value)} of USDC as gas prefund, and this wallet has ${formatUsdc(usdc.value ?? 0n)}. Receive a little USDC first.`
   return null
 })
 const canSend = computed(() => !!wallet.value && isAddress(to.value.trim()) && units.value > 0n && !blocker.value)
 const addressBad = computed(() => to.value.trim().length > 0 && !isAddress(to.value.trim()))
 
-async function loadBalances() {
-  if (!wallet.value) return
-  const entries = await Promise.all(TOKENS.map(async t => [t, await getTokenBalance(t, wallet.value!.address)] as const))
-  balances.value = new Map(entries)
+async function loadBalances(of: Hex) {
+  try {
+    const entries = await Promise.all(TOKENS.map(async t => [t, await getTokenBalance(t, of)] as const))
+    if (address.value !== of) return
+    balances.value = new Map(entries)
+    rememberBalances(of, balances.value)
+  }
+  catch {
+    // keep showing the last known balances; the next open or send refreshes them
+  }
 }
 
 onMounted(async () => {
   gasReserve('passkey').then(r => (reserve.value = r)).catch(() => {})
+  // Balances come straight from the chain, so with a known address they load alongside the SDK
+  // instead of after it. The SDK (download, then a round trip to Circle) is only needed to send.
+  if (address.value) loadBalances(address.value)
   try {
     const { openPasskeyWallet } = await import('../lib/passkey')
     wallet.value = await openPasskeyWallet()
-    await loadBalances()
+    if (address.value !== wallet.value.address) {
+      address.value = wallet.value.address
+      balances.value = new Map()
+      await loadBalances(wallet.value.address)
+    }
   }
   catch (e) {
     error.value = errorMessage(e)
@@ -95,11 +114,11 @@ onMounted(async () => {
   }
 })
 
-watch([view, wallet], async ([v, w]) => {
-  if (v !== 'receive' || !w || qrSvg.value) return
+watch([view, address], async ([v, a]) => {
+  if (v !== 'receive' || !a || qrSvg.value) return
   // The QR library is loaded only when someone asks to receive.
   const { default: QRCode } = await import('qrcode')
-  qrSvg.value = await QRCode.toString(w.address, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' })
+  qrSvg.value = await QRCode.toString(a, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' })
 })
 
 function useMax() {
@@ -114,15 +133,10 @@ function selectToken(t: Token) {
 }
 
 async function copy() {
-  if (!wallet.value) return
-  try {
-    await navigator.clipboard.writeText(wallet.value.address)
-    copied.value = true
-    setTimeout(() => (copied.value = false), 2000)
-  }
-  catch {
-    // clipboard unavailable on plain-http dev URLs
-  }
+  if (!address.value) return
+  await copyText(address.value)
+  copied.value = true
+  setTimeout(() => (copied.value = false), 2000)
 }
 
 async function send() {
@@ -134,7 +148,7 @@ async function send() {
     const { sendFromPasskey } = await import('../lib/passkey')
     sentTx.value = await sendFromPasskey(wallet.value, token.value, to.value.trim() as Hex, units.value)
     amount.value = ''
-    await loadBalances()
+    await loadBalances(wallet.value.address)
   }
   catch (e) {
     error.value = errorMessage(e, token.value.symbol)
@@ -162,15 +176,15 @@ async function forget() {
         </button>
       </div>
 
-      <p v-if="opening" class="loading muted">
+      <p v-if="opening && !address" class="loading muted">
         <span class="spinner" /> Opening your wallet…
       </p>
       <p v-else-if="!wallet && error" class="error">
         {{ error }}
       </p>
 
-      <template v-if="wallet">
-        <AccountCard name="KashLink wallet" :address="wallet.address" :passkey="true" :usdc="usdc" :eurc="balances.get(TOKENS[1]) ?? null" compact />
+      <template v-if="address">
+        <AccountCard name="KashLink wallet" :address :passkey="true" :usdc="usdc" :eurc="balances.get(TOKENS[1]) ?? null" compact />
         <p class="summary muted">
           A wallet on Arc that your passkey controls. Only this device and your passkey can move what's in it.
         </p>
@@ -178,7 +192,7 @@ async function forget() {
         <div class="balances">
           <button v-for="t in TOKENS" :key="t.symbol" class="tile" :class="{ on: t === token && view === 'send' }" @click="selectToken(t); view = 'send'">
             <span class="sym">{{ t.symbol }}</span>
-            <strong>{{ formatAmount(balances.get(t) ?? 0n, t) }}</strong>
+            <strong>{{ balances.has(t) ? formatAmount(balances.get(t)!, t) : '…' }}</strong>
           </button>
         </div>
 
@@ -201,7 +215,7 @@ async function forget() {
               Send USDC or EURC on <strong>Arc</strong> to this address. Other networks will not arrive.
             </p>
             <button class="full mono" @click="copy">
-              {{ wallet.address }}
+              {{ copied ? 'Address copied' : address }}
               <Icon :name="copied ? 'check' : 'copy'" :size="14" />
             </button>
           </div>
@@ -232,12 +246,15 @@ async function forget() {
           <p v-if="blocker" class="hint error left">
             {{ blocker }}
           </p>
+          <p v-else-if="sponsored" class="hint muted">
+            No gas to pay: KashLink covers it. The first send also sets the wallet up on chain.
+          </p>
           <p v-else class="hint muted">
             <template v-if="isNative(token)">
-              Gas comes out of the USDC, about {{ formatUsdc(reserve) }} at most. Max leaves that behind.
+              Gas comes out of the USDC: about {{ formatUsdc(reserve) }} is held as prefund and mostly returned. Max leaves that behind.
             </template>
             <template v-else>
-              Gas for this is paid in USDC, about {{ formatUsdc(reserve) }} at most.
+              Gas is paid in USDC: about {{ formatUsdc(reserve) }} is held as prefund and mostly returned.
             </template>
             The first send also sets the wallet up on chain.
           </p>
@@ -248,7 +265,10 @@ async function forget() {
             {{ error }}
           </p>
           <button class="btn btn-primary" :disabled="!canSend || sending" @click="send">
-            <template v-if="sending">
+            <template v-if="!wallet && opening">
+              <span class="spinner" /> Getting your wallet ready…
+            </template>
+            <template v-else-if="sending">
               <span class="spinner" /> Confirm with your passkey…
             </template>
             <template v-else>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { addressUrl } from '../lib/arc'
+import { copyText } from '../lib/clipboard'
 import { shortAddress } from '../lib/format'
 import { EURC, formatAmount, USDC } from '../lib/tokens'
 import Icon from './Icon.vue'
@@ -25,14 +26,9 @@ const props = defineProps<{
 const copied = ref(false)
 
 async function copy() {
-  try {
-    await navigator.clipboard.writeText(props.address)
-    copied.value = true
-    setTimeout(() => (copied.value = false), 2000)
-  }
-  catch {
-    // clipboard unavailable on plain-http dev URLs
-  }
+  await copyText(props.address)
+  copied.value = true
+  setTimeout(() => (copied.value = false), 2000)
 }
 </script>
 
@@ -47,7 +43,7 @@ async function copy() {
         <strong class="name">{{ name }}</strong>
         <span class="meta">
           <button class="addr mono" :aria-label="copied ? 'Copied' : 'Copy address'" @click="copy">
-            {{ shortAddress(address) }} <Icon :name="copied ? 'check' : 'copy'" :size="13" />
+            {{ copied ? 'Copied' : shortAddress(address) }} <Icon :name="copied ? 'check' : 'copy'" :size="13" />
           </button>
           <span class="chip">{{ passkey ? 'Passkey' : 'Arc' }}</span>
         </span>

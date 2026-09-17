@@ -157,6 +157,7 @@ All `VITE_` variables are baked in at build time. See [`.env.example`](.env.exam
 | `VITE_ARC_RPC_URL` | Override the public RPC. |
 | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Analytics. Unset ⇒ nothing is recorded. |
 | `VITE_CIRCLE_CLIENT_KEY` | Circle Console client key. Unset ⇒ the passkey-wallet option is hidden. |
+| `VITE_CIRCLE_SPONSOR_GAS` | `true` / `false`: Circle Gas Station pays passkey-wallet gas. Default: on for testnet, off for mainnet (needs a paymaster policy). |
 
 ## Deployment
 
