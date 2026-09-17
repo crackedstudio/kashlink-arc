@@ -30,6 +30,8 @@ const to = ref('')
 const claimTx = ref<string | null>(null)
 const error = ref<string | null>(null)
 const connecting = ref(false)
+/** Shown when the recipient would rather paste an address than connect a wallet. */
+const manual = ref(false)
 let pollTimer: number | undefined
 
 const amount = computed(() => (link.value ? formatUsdc(link.value.amount) : ''))
@@ -101,10 +103,14 @@ onMounted(async () => {
 
 onUnmounted(() => clearInterval(pollTimer))
 
-/** Fills the payout field from a browser wallet. A convenience; pasting an address works just as well. */
-async function useWallet() {
+/**
+ * The one-tap path: connect a browser wallet, take its address, claim to it. The wallet only supplies
+ * the address — it signs nothing, since the claim is signed by the link's own key.
+ */
+async function claimWithWallet() {
   const wallets = discoverWallets()
   if (!wallets.length) {
+    manual.value = true
     error.value = 'No wallet found in this browser. Paste the address you want the USDC sent to instead.'
     return
   }
@@ -116,10 +122,12 @@ async function useWallet() {
   }
   catch (e) {
     error.value = errorMessage(e)
+    return
   }
   finally {
     connecting.value = false
   }
+  await claim()
 }
 
 async function claim() {
@@ -177,32 +185,45 @@ async function claim() {
     <div class="spacer" />
 
     <template v-if="state === 'ready' || state === 'claiming'">
-      <p class="label">
-        Send it to
-      </p>
-      <div class="to-row">
+      <template v-if="manual">
+        <p class="label">
+          Send it to
+        </p>
         <input
           v-model="to" class="to" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false"
           placeholder="0x… address on Arc" :disabled="state === 'claiming'"
         >
-        <button class="use-wallet" :disabled="connecting || state === 'claiming'" aria-label="Use my wallet address" @click="useWallet">
-          <span v-if="connecting" class="spinner" />
-          <Icon v-else name="wallet" :size="20" />
-        </button>
-      </div>
-      <p class="hint muted">
-        Any wallet that works on Arc. Nothing to install, nothing to sign, no gas — the link pays for itself.
+        <p class="hint muted">
+          Any address on Arc. Nothing to sign, no gas — the link pays for itself.
+        </p>
+      </template>
+      <p v-else class="hint muted center">
+        Nothing to sign and no gas to pay — the link covers it. Your wallet only tells us where to send the USDC.
       </p>
       <p v-if="error" class="error">
         {{ error }}
       </p>
-      <button class="btn btn-primary" :disabled="!toValid || state === 'claiming'" @click="claim">
+      <button v-if="manual" class="btn btn-primary" :disabled="!toValid || state === 'claiming'" @click="claim">
         <template v-if="state === 'claiming'">
           <span class="spinner" /> Claiming…
         </template>
         <template v-else>
           Claim {{ amount }}
         </template>
+      </button>
+      <button v-else class="btn btn-primary" :disabled="connecting || state === 'claiming'" @click="claimWithWallet">
+        <template v-if="state === 'claiming'">
+          <span class="spinner" /> Claiming…
+        </template>
+        <template v-else-if="connecting">
+          <span class="spinner" /> Connecting…
+        </template>
+        <template v-else>
+          <Icon name="wallet" :size="20" /> Connect wallet & claim {{ amount }}
+        </template>
+      </button>
+      <button class="link-btn switch" :disabled="state === 'claiming'" @click="manual = !manual; error = null">
+        {{ manual ? 'Use a wallet instead' : 'No wallet? Paste an address instead' }}
       </button>
     </template>
 
@@ -303,21 +324,13 @@ async function claim() {
   margin-bottom: 8px;
 }
 
-.to-row {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding-left: 14px;
+.to {
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  border: 0;
   border-radius: 500px;
   background: var(--highlight);
-}
-
-.to {
-  flex: 1;
-  min-width: 0;
-  height: 48px;
-  border: 0;
-  background: none;
   color: var(--text);
   font: inherit;
   font-family: ui-monospace, monospace;
@@ -325,30 +338,29 @@ async function claim() {
   outline: none;
 }
 
+.to:focus {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
 .to::placeholder {
   color: var(--muted-2);
   font-family: 'Mulish', sans-serif;
 }
 
-.use-wallet {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 44px;
-  height: 48px;
-  border: 0;
-  background: none;
-  color: var(--accent);
-}
-
-.use-wallet .spinner {
-  width: 18px;
-  height: 18px;
-}
-
 .hint {
   margin: 10px 2px 14px;
   font-size: 13px;
+}
+
+.hint.center {
+  text-align: center;
+}
+
+.switch {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  text-align: center;
 }
 
 .tx {
