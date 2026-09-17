@@ -14,7 +14,7 @@ defineProps<{
   linkCount: number
   expiredCount: number
 }>()
-const emit = defineEmits<{ connect: [wallet: DiscoveredWallet], next: [], showLinks: [] }>()
+const emit = defineEmits<{ connect: [wallet: DiscoveredWallet], next: [], showLinks: [], stats: [] }>()
 
 const steps = [
   { title: 'Put USDC or EURC in a KashLink', text: 'For one person, or a drop the first few to open it share' },
@@ -157,7 +157,9 @@ function choose(wallet: DiscoveredWallet) {
       </button>
     </template>
     <p class="legal muted">
-      By using KashLink you agree to the <a href="/terms" target="_blank" rel="noopener">Terms and Conditions</a>.
+      <a href="/stats" @click.prevent="emit('stats')"><Icon name="chart" :size="12" /> Live stats</a> ·
+      <a href="https://github.com/crackedstudio/kashlink-arc" target="_blank" rel="noopener">Source</a> ·
+      <a href="/terms" target="_blank" rel="noopener">Terms</a>
     </p>
   </main>
 </template>
@@ -314,7 +316,10 @@ function choose(wallet: DiscoveredWallet) {
 }
 
 .legal a {
-  text-decoration: underline;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  text-decoration: none;
 }
 
 .error {

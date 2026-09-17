@@ -3,6 +3,7 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import { reactive } from 'vue'
 import { CHAIN, ESCROW_ADDRESS, fees, rpc } from './arc'
 import { ESCROW_ABI } from './escrow-abi'
+import { escrowLogs } from './explorer'
 import { loadLinks, saveLink, type StoredLink } from './storage'
 import { ERC20_ABI, isNative, NATIVE, type Token, tokenByAddress } from './tokens'
 
@@ -324,14 +325,13 @@ export interface ChainLink {
  * their links on a device that has no keys — it cannot re-share them, since the key is not on chain.
  */
 export async function linksFundedBy(sender: Hex): Promise<ChainLink[]> {
-  const fromBlock = BigInt(import.meta.env.VITE_ESCROW_DEPLOY_BLOCK || 0)
-  const logs = await rpc.getContractEvents({ ...escrow, eventName: 'LinkCreated', args: { sender }, fromBlock, toBlock: 'latest' })
+  const { logs } = await escrowLogs('LinkCreated', sender)
   return logs.map(log => ({
-    id: log.args.linkId!,
-    token: tokenByAddress(log.args.token ?? NATIVE),
-    amountEach: log.args.amountEach!,
-    slots: log.args.slots!,
-    expiry: Number(log.args.expiry!),
+    id: log.args.linkId as Hex,
+    token: tokenByAddress((log.args.token as Hex) ?? NATIVE),
+    amountEach: log.args.amountEach as bigint,
+    slots: Number(log.args.slots),
+    expiry: Number(log.args.expiry),
     createdBlock: log.blockNumber,
   }))
 }

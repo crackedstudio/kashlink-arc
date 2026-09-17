@@ -6,6 +6,7 @@ import IntroScreen from './components/IntroScreen.vue'
 import LinksSheet from './components/LinksSheet.vue'
 import ReadySheet from './components/ReadySheet.vue'
 import ReviewScreen from './components/ReviewScreen.vue'
+import StatsScreen from './components/StatsScreen.vue'
 import { track } from './lib/analytics'
 import { ESCROW_CONFIGURED } from './lib/arc'
 import {
@@ -16,10 +17,10 @@ import { loadLinks, removeLink, saveLink, type StoredLink } from './lib/storage'
 import { getTokenBalance, type Token, USDC } from './lib/tokens'
 import { type Connected, connect, connected, type DiscoveredWallet, errorMessage, isUserRejection } from './lib/wallet'
 
-type Screen = 'intro' | 'amount' | 'review' | 'claim'
+type Screen = 'intro' | 'amount' | 'review' | 'claim' | 'stats'
 
 const claimLink = ref<ParsedHash | null>(parseHash(location.hash))
-const screen = ref<Screen>(claimLink.value ? 'claim' : 'intro')
+const screen = ref<Screen>(claimLink.value ? 'claim' : location.pathname.replace(/\/+$/, '') === '/stats' ? 'stats' : 'intro')
 
 const wallet = ref<Connected | null>(connected())
 const walletError = ref<string | null>(null)
@@ -56,6 +57,9 @@ onMounted(() => {
     readyLink.value = null
     showLinks.value = false
     screen.value = 'claim'
+  })
+  window.addEventListener('popstate', () => {
+    if (screen.value === 'stats' || screen.value === 'intro') screen.value = location.pathname.replace(/\/+$/, '') === '/stats' ? 'stats' : 'intro'
   })
   if (!ESCROW_CONFIGURED) return
   // Check the sender's own links in the background, so an expired one can be flagged on the intro
@@ -173,6 +177,16 @@ function closeReady() {
   links.value = loadLinks()
 }
 
+function showStats() {
+  history.pushState(null, '', '/stats')
+  screen.value = 'stats'
+}
+
+function leaveStats() {
+  history.pushState(null, '', '/')
+  screen.value = 'intro'
+}
+
 function finishClaim() {
   history.replaceState(null, '', location.pathname + location.search)
   claimLink.value = null
@@ -182,11 +196,12 @@ function finishClaim() {
 
 <template>
   <ClaimScreen v-if="screen === 'claim' && claimLink" :key="claimLink.key" :link-key="claimLink.key" :message="claimLink.message" @done="finishClaim" />
+  <StatsScreen v-else-if="screen === 'stats'" @back="leaveStats" />
   <IntroScreen
     v-else-if="screen === 'intro'"
     :wallet :connecting :wallet-error :balance="usdcBalance"
     :link-count="links.length" :expired-count="expiredCount"
-    @connect="connectWallet" @next="startCreate" @show-links="showLinks = true"
+    @connect="connectWallet" @next="startCreate" @show-links="showLinks = true" @stats="showStats"
   />
   <AmountScreen
     v-else-if="screen === 'amount'" :token :balance :usdc-balance :fees :slots :expiry-seconds="expirySeconds"

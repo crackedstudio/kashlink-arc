@@ -27,7 +27,7 @@ const testnet: Chain = {
 }
 
 export const CHAIN: Chain = IS_MAINNET ? arc : testnet
-const EXPLORER_URL = CHAIN.blockExplorers!.default.url
+export const EXPLORER_URL = CHAIN.blockExplorers!.default.url
 
 export const rpc = createPublicClient({
   chain: CHAIN,
