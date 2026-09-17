@@ -44,9 +44,14 @@
 }
 
 html {
-  /* No rubber-band bounce when installed as a PWA. */
-  overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
+}
+
+/* Installed as a PWA: no rubber-band bounce. In a browser tab the root scrolls normally, so pull-to-refresh still works. */
+@media (display-mode: standalone) {
+  html {
+    overscroll-behavior: none;
+  }
 }
 
 html,
