@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineProps<{
-  name: 'back' | 'info' | 'alert' | 'copy' | 'check' | 'backspace' | 'chevron' | 'help' | 'dollar' | 'whatsapp' | 'link' | 'share' | 'wallet' | 'clock' | 'external' | 'drop' | 'qr' | 'chart'
+  name: 'back' | 'info' | 'alert' | 'copy' | 'check' | 'backspace' | 'chevron' | 'help' | 'dollar' | 'whatsapp' | 'link' | 'share' | 'wallet' | 'clock' | 'external' | 'drop' | 'qr' | 'chart' | 'fingerprint' | 'send' | 'receive' | 'switch' | 'logout' | 'key'
   size?: number
 }>()
 </script>
@@ -55,6 +55,21 @@ defineProps<{
     </template>
     <template v-else-if="name === 'chart'">
       <path d="M4 20V10M10 20V4M16 20v-8M22 20H2" />
+    </template>
+    <template v-else-if="name === 'fingerprint'">
+      <path d="M6.5 8.5a6 6 0 0 1 11 0M4.5 12.5a8 8 0 0 1 1-4M19.5 12.5a8 8 0 0 0-.4-2.5" />
+      <path d="M8.5 12a3.5 3.5 0 0 1 7 0c0 3-1 5.5-2.5 7.5M12 12c0 3.5-1.2 6-3 8M15.5 15.5c-.3 1.5-.8 3-1.5 4.2M6 15.5c.5 1.6.3 3-.5 4.5" />
+    </template>
+    <path v-else-if="name === 'send'" d="M7 17L17 7M9 7h8v8" />
+    <path v-else-if="name === 'receive'" d="M12 4v12M6 10l6 6 6-6M5 20h14" />
+    <template v-else-if="name === 'switch'">
+      <path d="M17 2l4 4-4 4M21 6H8a4 4 0 0 0-4 4v1M7 22l-4-4 4-4M3 18h13a4 4 0 0 0 4-4v-1" />
+    </template>
+    <template v-else-if="name === 'logout'">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+    </template>
+    <template v-else-if="name === 'key'">
+      <circle cx="8" cy="15" r="4" /><path d="M10.8 12.2L20 3M15 8l3 3M18 5l3 3" />
     </template>
     <template v-else-if="name === 'external'">
       <path d="M14 4h6v6M20 4l-9 9" /><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" />

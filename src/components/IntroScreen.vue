@@ -1,22 +1,23 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { CHAIN, ESCROW_CONFIGURED, IS_MAINNET } from '../lib/arc'
-import { formatUsdc, shortAddress } from '../lib/format'
 import { type Connected, discoverWallets, type DiscoveredWallet } from '../lib/wallet'
+import AccountCard from './AccountCard.vue'
 import Icon from './Icon.vue'
 import Logo from './Logo.vue'
 
-defineProps<{
+const props = defineProps<{
   wallet: Connected | null
   connecting: boolean
   walletError: string | null
-  balance: bigint | null
+  usdcBalance: bigint | null
+  eurcBalance: bigint | null
   linkCount: number
   expiredCount: number
   hasPasskey: boolean
   openingPasskey: boolean
 }>()
-const emit = defineEmits<{ connect: [wallet: DiscoveredWallet], usePasskey: [], disconnect: [], next: [], showLinks: [], stats: [], showWallet: [] }>()
+const emit = defineEmits<{ connect: [wallet: DiscoveredWallet], usePasskey: [], signInPasskey: [], disconnect: [], next: [], showLinks: [], stats: [], showWallet: [], refresh: [] }>()
 
 /** Passkey wallets need a Circle client key; without one the option simply isn't offered. */
 const PASSKEYS = !!import.meta.env.VITE_CIRCLE_CLIENT_KEY
@@ -26,6 +27,8 @@ const steps = [
   { title: 'Share the link', text: 'Chat, QR code, or a note on the link — anyone holding it can claim' },
   { title: 'They receive the money', text: 'When they open it — no wallet setup, no gas, instant' },
 ]
+
+const signedIn = computed(() => !!props.wallet && ESCROW_CONFIGURED)
 
 const wallets = ref<DiscoveredWallet[]>([])
 const choosing = ref(false)
@@ -53,14 +56,33 @@ function choose(wallet: DiscoveredWallet) {
       <span>KashLink</span>
       <span v-if="!IS_MAINNET" class="net">{{ CHAIN.name }}</span>
     </div>
-    <h1 class="title intro-title">
+    <!-- Signed in: the account leads and the pitch goes; the guide and the button follow right under it. -->
+    <template v-if="signedIn">
+      <AccountCard class="top" :name="wallet!.name" :address="wallet!.address" :passkey="wallet!.passkey" :icon="wallet!.icon" :usdc="usdcBalance" :eurc="eurcBalance">
+        <div class="actions">
+          <button v-if="wallet!.passkey" class="action" @click="emit('showWallet')">
+            <Icon name="send" :size="16" /> Send &amp; receive
+          </button>
+          <button class="action" @click="emit('disconnect')">
+            <Icon name="switch" :size="16" /> {{ wallet!.passkey ? 'Switch wallet' : 'Disconnect' }}
+          </button>
+        </div>
+      </AccountCard>
+      <p v-if="usdcBalance === null" class="hint muted center">
+        Balance unavailable right now.
+        <button class="link-btn inline" @click="emit('refresh')">
+          Retry
+        </button>
+      </p>
+    </template>
+    <h1 v-else class="title intro-title">
       Send stablecoins as a link
     </h1>
-    <p class="subtitle muted">
+    <p v-if="!signedIn" class="subtitle muted">
       No address, no account, no gas. Whoever opens the link keeps the money.
     </p>
 
-    <svg class="hero" viewBox="0 0 335 168" role="img" aria-label="A phone sending USDC through a link">
+    <svg v-if="!signedIn" class="hero" viewBox="0 0 335 168" role="img" aria-label="A phone sending USDC through a link">
       <defs>
         <radialGradient id="hero-bg" cx="100%" cy="100%" r="120%">
           <stop offset="0" stop-color="#265DD7" />
@@ -115,6 +137,10 @@ function choose(wallet: DiscoveredWallet) {
       </li>
     </ol>
 
+    <button v-if="signedIn" class="btn btn-primary cta" @click="emit('next')">
+      Create KashLink
+    </button>
+
     <div class="spacer" />
 
     <button v-if="expiredCount" class="expired-nudge" @click="emit('showLinks')">
@@ -124,27 +150,14 @@ function choose(wallet: DiscoveredWallet) {
     <button v-else-if="linkCount" class="link-btn links" @click="emit('showLinks')">
       <Icon name="link" :size="18" /> Your KashLinks ({{ linkCount }})
     </button>
-    <button v-if="hasPasskey" class="link-btn links" @click="emit('showWallet')">
+    <button v-if="hasPasskey && !wallet?.passkey" class="link-btn links" @click="emit('showWallet')">
       <Icon name="wallet" :size="18" /> Your KashLink wallet
     </button>
 
     <p v-if="!ESCROW_CONFIGURED" class="error">
       This build has no escrow contract configured, so links cannot be created.
     </p>
-    <template v-else-if="wallet">
-      <p class="account muted">
-        <Icon name="wallet" :size="16" />
-        {{ wallet.name }} · {{ shortAddress(wallet.address) }}
-        <strong v-if="balance !== null">{{ formatUsdc(balance) }}</strong>
-      </p>
-      <button class="btn btn-primary" @click="emit('next')">
-        Create KashLink
-      </button>
-      <button v-if="wallet.passkey" class="link-btn switch" @click="emit('disconnect')">
-        Use a browser wallet instead
-      </button>
-    </template>
-    <template v-else>
+    <template v-else-if="!signedIn">
       <p v-if="walletError" class="error">
         {{ walletError }}
       </p>
@@ -152,28 +165,53 @@ function choose(wallet: DiscoveredWallet) {
         No wallet found. Install MetaMask, Rabby, or another EVM wallet, then reload.
       </p>
       <div v-if="choosing && wallets.length" class="wallets card">
+        <p class="label pick">
+          Choose a wallet
+        </p>
         <button v-for="w in wallets" :key="w.uuid" class="wallet-row" @click="choose(w)">
           <img v-if="w.icon" :src="w.icon" alt="" width="24" height="24">
           <Icon v-else name="wallet" :size="24" />
           {{ w.name }}
         </button>
+        <button class="link-btn cancel" @click="choosing = false">
+          Cancel
+        </button>
       </div>
-      <button v-else class="btn btn-primary" :disabled="connecting" @click="connectClicked">
-        <template v-if="connecting">
-          <span class="spinner" /> Connecting…
+      <template v-else>
+        <template v-if="PASSKEYS">
+          <button class="btn btn-primary" :disabled="connecting || openingPasskey" @click="emit('usePasskey')">
+            <template v-if="openingPasskey">
+              <span class="spinner" /> {{ hasPasskey ? 'Opening your wallet…' : 'Setting up your passkey…' }}
+            </template>
+            <template v-else>
+              <Icon name="fingerprint" :size="20" /> {{ hasPasskey ? 'Open your KashLink wallet' : 'Create a wallet with passkey' }}
+            </template>
+          </button>
+          <p class="hint muted center">
+            {{ hasPasskey ? 'Face ID, Touch ID or your device PIN. No extension needed.' : 'Face ID, Touch ID or your device PIN. Nothing to install, ready in seconds.' }}
+          </p>
+          <!-- A passkey made on another device syncs through the platform; this device just has no record of it yet. -->
+          <button v-if="!hasPasskey" class="link-btn have-one" :disabled="connecting || openingPasskey" @click="emit('signInPasskey')">
+            Already have a wallet? Sign in with your passkey
+          </button>
+          <button class="btn btn-outline" :disabled="connecting || openingPasskey" @click="connectClicked">
+            <template v-if="connecting">
+              <span class="spinner" /> Connecting…
+            </template>
+            <template v-else>
+              <Icon name="wallet" :size="20" /> Connect a browser wallet
+            </template>
+          </button>
         </template>
-        <template v-else>
-          <Icon name="wallet" :size="20" /> Connect wallet
-        </template>
-      </button>
-      <button v-if="PASSKEYS" class="btn btn-outline" :disabled="connecting || openingPasskey" @click="emit('usePasskey')">
-        <template v-if="openingPasskey">
-          <span class="spinner" /> {{ hasPasskey ? 'Opening your wallet…' : 'Setting up your passkey…' }}
-        </template>
-        <template v-else>
-          {{ hasPasskey ? 'Use your KashLink wallet' : 'No wallet? Create one with a passkey' }}
-        </template>
-      </button>
+        <button v-else class="btn btn-primary" :disabled="connecting" @click="connectClicked">
+          <template v-if="connecting">
+            <span class="spinner" /> Connecting…
+          </template>
+          <template v-else>
+            <Icon name="wallet" :size="20" /> Connect wallet
+          </template>
+        </button>
+      </template>
     </template>
     <p class="legal muted">
       <a href="/stats" @click.prevent="emit('stats')"><Icon name="chart" :size="12" /> Live stats</a> ·
@@ -286,24 +324,81 @@ function choose(wallet: DiscoveredWallet) {
   margin-bottom: 4px;
 }
 
-.account {
+.account.top {
+  margin-top: 20px;
+}
+
+.cta {
+  margin-top: 16px;
+}
+
+.actions {
   display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.action {
+  display: inline-flex;
+  flex: 1;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-bottom: 10px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 500px;
+  background: var(--highlight);
+  color: var(--text);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  transition: background 0.15s var(--ease);
 }
 
-.account strong {
-  margin-left: 4px;
-  color: var(--text);
+.action:active {
+  background: var(--highlight-strong);
+}
+
+.hint {
+  margin: 8px 0 10px;
+  font-size: 12px;
+}
+
+.hint.center {
+  text-align: center;
+}
+
+.link-btn.inline {
+  min-height: 0;
+  padding: 0;
+  font-size: 12px;
+}
+
+.btn-outline {
+  margin-top: 0;
+}
+
+.have-one {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  margin: -4px 0 10px;
+  font-size: 13px;
 }
 
 .wallets {
   margin-bottom: 8px;
   padding: 4px 8px;
+}
+
+.pick {
+  padding: 10px 8px 4px;
+}
+
+.cancel {
+  display: block;
+  width: 100%;
+  font-size: 13px;
 }
 
 .wallet-row {

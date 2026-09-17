@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import AmountScreen from './components/AmountScreen.vue'
 import ClaimScreen from './components/ClaimScreen.vue'
 import IntroScreen from './components/IntroScreen.vue'
@@ -9,14 +9,15 @@ import ReviewScreen from './components/ReviewScreen.vue'
 import StatsScreen from './components/StatsScreen.vue'
 import WalletSheet from './components/WalletSheet.vue'
 import { track } from './lib/analytics'
-import { ESCROW_CONFIGURED } from './lib/arc'
+import { ESCROW_CONFIGURED, gasReserve } from './lib/arc'
+import { formatUsdc } from './lib/format'
 import {
   chainState, createLink, EXPIRY_OPTIONS, feeParams, type FeeParams, isExpired, newLink,
-  type NewLink, parseHash, type ParsedHash, quoteWith, refreshStatuses,
+  type NewLink, parseHash, type ParsedHash, quoteWith, refreshStatuses, shortfall,
 } from './lib/links'
 import { loadLinks, removeLink, saveLink, type StoredLink } from './lib/storage'
-import { getTokenBalance, type Token, USDC } from './lib/tokens'
-import { type Connected, connect, connected, type DiscoveredWallet, errorMessage, isUserRejection } from './lib/wallet'
+import { EURC, formatAmount, getTokenBalance, type Token, USDC } from './lib/tokens'
+import { type Connected, connect, connected, disconnect as forgetBrowserWallet, type DiscoveredWallet, errorMessage, isUserRejection } from './lib/wallet'
 
 type Screen = 'intro' | 'amount' | 'review' | 'claim' | 'stats'
 
@@ -26,12 +27,16 @@ const screen = ref<Screen>(claimLink.value ? 'claim' : location.pathname.replace
 const wallet = ref<Connected | null>(connected())
 const walletError = ref<string | null>(null)
 const connecting = ref(false)
-/** Balance of the chosen token, plus native USDC (which always pays the stipends). */
-const balance = ref<bigint | null>(null)
+/** Both balances are always read: USDC pays the stipends and gas whatever the link carries. */
 const usdcBalance = ref<bigint | null>(null)
+const eurcBalance = ref<bigint | null>(null)
+/** Native USDC kept back for the sender's own transaction fee; depends on the kind of wallet. */
+const reserve = ref(0n)
 const fees = ref<FeeParams | null>(null)
 
-const token = ref<Token>(USDC)
+// shallowRef: a plain ref would proxy the token, and the proxy is not `===` to the TOKENS entry.
+const token = shallowRef<Token>(USDC)
+const balance = computed(() => (token.value === USDC ? usdcBalance.value : eurcBalance.value))
 const amount = ref(0n)
 const slots = ref(1)
 const message = ref('')
@@ -61,36 +66,43 @@ function hasSavedPasskey(): boolean {
 
 const openingPasskey = ref(false)
 
-/** Sends from the passkey wallet: reopens the one saved on this device, or registers a new passkey. */
-async function usePasskey() {
+/**
+ * Uses the passkey wallet as the sender. `open` reopens the one saved on this device, or — when
+ * there is none, for someone whose passkey lives on another device or whose site data was cleared —
+ * shows the platform's passkey picker. `create` registers a new passkey. Reopening a saved wallet
+ * needs no prompt (the credential is public data; only sending asks for the passkey), so it can
+ * also happen quietly at launch.
+ */
+async function usePasskey(mode: 'open' | 'create' = hasPasskey.value ? 'open' : 'create', quiet = false) {
   openingPasskey.value = true
   walletError.value = null
   try {
     const passkey = await import('./lib/passkey')
-    const opened = hasPasskey.value ? await passkey.openPasskeyWallet() : await passkey.createPasskeyWallet()
+    const opened = mode === 'open' ? await passkey.openPasskeyWallet() : await passkey.createPasskeyWallet()
     hasPasskey.value = true
     wallet.value = passkey.asSender(opened)
-    balance.value = null
+    clearBalances()
     await loadBalance()
   }
   catch (error) {
-    const text = `${(error as Error).name} ${(error as { details?: string }).details ?? (error as Error).message}`
-    walletError.value = /NotAllowed|abort|cancel/i.test(text)
-      ? 'Passkey request was cancelled.'
-      : /entity config|SecurityError|domain/i.test(text)
-        ? 'Passkey wallets are not set up for this site yet.'
-        : errorMessage(error)
+    if (!quiet) walletError.value = errorMessage(error)
   }
   finally {
     openingPasskey.value = false
   }
 }
 
-function disconnect() {
-  wallet.value = connected()
-  balance.value = null
+function clearBalances() {
   usdcBalance.value = null
-  loadBalance()
+  eurcBalance.value = null
+}
+
+/** Drops the current account. A browser wallet is forgotten; the passkey wallet stays on the device. */
+function disconnect() {
+  if (wallet.value && !wallet.value.passkey) forgetBrowserWallet()
+  wallet.value = null
+  walletError.value = null
+  clearBalances()
 }
 
 function openWallet() {
@@ -101,6 +113,11 @@ function openWallet() {
 const expiredCount = computed(() => links.value.filter(l => chainState[l.id] && isExpired(chainState[l.id])).length)
 const quote = computed(() => (fees.value ? quoteWith(fees.value, token.value, amount.value, slots.value) : null))
 
+watch(() => wallet.value?.passkey, async (passkey) => {
+  if (passkey === undefined) return
+  reserve.value = await gasReserve(passkey ? 'passkey' : 'wallet').catch(() => 0n)
+}, { immediate: true })
+
 onMounted(() => {
   // Opening another KashLink while one is already open only changes the #hash, without a reload.
   window.addEventListener('hashchange', () => {
@@ -109,6 +126,7 @@ onMounted(() => {
     claimLink.value = parsed
     readyLink.value = null
     showLinks.value = false
+    showWallet.value = false
     screen.value = 'claim'
   })
   window.addEventListener('popstate', () => {
@@ -119,23 +137,21 @@ onMounted(() => {
   // screen. Skipped when opening someone else's link, where these are not ours to care about.
   if (screen.value !== 'claim' && links.value.length) refreshStatuses(links.value).catch(() => {})
   feeParams().then(p => (fees.value = p)).catch(() => {})
+  // The passkey wallet is the front door: if this device has one, it is signed in from the start.
+  if (screen.value !== 'claim' && hasPasskey.value && !wallet.value) usePasskey('open', true)
 })
 
 async function loadBalance() {
   if (!wallet.value) return
   const address = wallet.value.address
-  const forToken = token.value
   try {
-    const [usdc, chosen] = await Promise.all([
-      getTokenBalance(USDC, address),
-      forToken === USDC ? null : getTokenBalance(forToken, address),
-    ])
-    if (wallet.value?.address !== address || token.value !== forToken) return
+    const [usdc, eurc] = await Promise.all([getTokenBalance(USDC, address), getTokenBalance(EURC, address)])
+    if (wallet.value?.address !== address) return
     usdcBalance.value = usdc
-    balance.value = chosen ?? usdc
+    eurcBalance.value = eurc
   }
   catch {
-    balance.value = null
+    clearBalances()
   }
 }
 
@@ -143,8 +159,6 @@ function selectToken(next: Token) {
   if (next === token.value) return
   token.value = next
   amount.value = 0n
-  balance.value = null
-  loadBalance()
 }
 
 async function connectWallet(choice: DiscoveredWallet) {
@@ -152,7 +166,7 @@ async function connectWallet(choice: DiscoveredWallet) {
   walletError.value = null
   try {
     wallet.value = await connect(choice)
-    balance.value = null
+    clearBalances()
     await loadBalance()
   }
   catch (error) {
@@ -178,6 +192,18 @@ function onAmount(units: bigint, count: number, expiry: number) {
   screen.value = 'review'
 }
 
+/** The plain-words reason the wallet cannot pay for `q`, checked before anything is signed. */
+function cannotAfford(q: NonNullable<typeof quote.value>): string | null {
+  if (balance.value === null || usdcBalance.value === null) return null
+  const short = shortfall(q, balance.value, usdcBalance.value, reserve.value)
+  if (!short) return null
+  const have = formatAmount(short.have, short.token)
+  const need = formatAmount(short.need, short.token)
+  return short.reason === 'gas'
+    ? `Not enough USDC for the claim gas and network fee: you have ${have} and this link needs ${need} of USDC on top of the ${q.token.symbol}.`
+    : `Not enough ${short.token.symbol}: you have ${have} and this link costs ${need} including the fee${short.token === USDC ? ` and about ${formatUsdc(reserve.value)} of network gas` : ''}.`
+}
+
 async function send() {
   const link = pendingLink.value
   const w = wallet.value
@@ -186,6 +212,14 @@ async function send() {
   sending.value = true
   approving.value = false
   sendError.value = null
+  // Balances may have moved since the amount screen; say so here rather than let the chain reject it.
+  await loadBalance()
+  const short = cannotAfford(q)
+  if (short) {
+    sendError.value = short
+    sending.value = false
+    return
+  }
   const stored: StoredLink = {
     key: link.key,
     id: link.id,
@@ -212,7 +246,7 @@ async function send() {
   catch (error) {
     // Nothing was sent when the user declined, so the unused key can go.
     if (isUserRejection(error)) removeLink(link.id)
-    sendError.value = errorMessage(error)
+    sendError.value = errorMessage(error, token.value.symbol)
   }
   finally {
     sending.value = false
@@ -250,6 +284,7 @@ function finishClaim() {
   history.replaceState(null, '', location.pathname + location.search)
   claimLink.value = null
   screen.value = 'intro'
+  if (hasPasskey.value && !wallet.value) usePasskey('open', true)
 }
 </script>
 
@@ -258,12 +293,12 @@ function finishClaim() {
   <StatsScreen v-else-if="screen === 'stats'" @back="leaveStats" />
   <IntroScreen
     v-else-if="screen === 'intro'"
-    :wallet :connecting :wallet-error :balance="usdcBalance"
+    :wallet :connecting :wallet-error :usdc-balance :eurc-balance
     :link-count="links.length" :expired-count="expiredCount" :has-passkey="hasPasskey" :opening-passkey="openingPasskey"
-    @connect="connectWallet" @use-passkey="usePasskey" @disconnect="disconnect" @next="startCreate" @show-links="showLinks = true" @stats="showStats" @show-wallet="showWallet = true"
+    @connect="connectWallet" @use-passkey="usePasskey()" @sign-in-passkey="usePasskey('open')" @disconnect="disconnect" @next="startCreate" @show-links="showLinks = true" @stats="showStats" @show-wallet="showWallet = true" @refresh="loadBalance"
   />
   <AmountScreen
-    v-else-if="screen === 'amount'" :token :balance :usdc-balance :fees :slots :expiry-seconds="expirySeconds"
+    v-else-if="screen === 'amount'" :token :balance :usdc-balance :fees :slots :expiry-seconds="expirySeconds" :gas-reserve="reserve"
     @back="screen = 'intro'" @retry="loadBalance" @update:token="selectToken" @continue="onAmount"
   />
   <ReviewScreen
@@ -274,5 +309,5 @@ function finishClaim() {
 
   <LinksSheet v-if="showLinks" :links :wallet @connect="connectWallet" @open="openLink" @changed="links = loadLinks()" @close="showLinks = false" />
   <ReadySheet v-if="readyLink" :key="readyLink.id" :link="readyLink" :wallet @connect="connectWallet" @close="closeReady" />
-  <WalletSheet v-if="showWallet" @close="showWallet = false" @forgotten="forgotPasskey" />
+  <WalletSheet v-if="showWallet" @close="showWallet = false; loadBalance()" @forgotten="forgotPasskey" />
 </template>
