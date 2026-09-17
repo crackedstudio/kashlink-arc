@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { formatCountdown, formatUsdc, parseUsdc, shortAddress } from '../format'
+import { EURC, formatAmount, parseAmount } from '../tokens'
 
 describe('usdc amounts', () => {
   it('formats native wei as dollars', () => {
@@ -23,6 +24,14 @@ describe('usdc amounts', () => {
 
   it('round-trips', () => {
     expect(formatUsdc(parseUsdc('42.42'))).toBe('$42.42')
+  })
+})
+
+describe('eurc amounts', () => {
+  it('uses 6 decimals and the euro sign', () => {
+    expect(formatAmount(5_000_000n, EURC)).toBe('€5.00')
+    expect(parseAmount('12.5', EURC)).toBe(12_500_000n)
+    expect(formatAmount(parseAmount('0.07', EURC), EURC)).toBe('€0.07')
   })
 })
 

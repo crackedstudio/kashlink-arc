@@ -41,6 +41,19 @@ export const ESCROW_ABI = [
   },
   {
     "type": "function",
+    "name": "MAX_SLOTS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint24",
+        "internalType": "uint24"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "STIPEND",
     "inputs": [],
     "outputs": [
@@ -74,6 +87,30 @@ export const ESCROW_ABI = [
   },
   {
     "type": "function",
+    "name": "claimedBy",
+    "inputs": [
+      {
+        "name": "linkId",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "create",
     "inputs": [
       {
@@ -82,14 +119,24 @@ export const ESCROW_ABI = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amountEach",
         "type": "uint96",
         "internalType": "uint96"
       },
       {
+        "name": "slots",
+        "type": "uint24",
+        "internalType": "uint24"
+      },
+      {
         "name": "expiry",
-        "type": "uint64",
-        "internalType": "uint64"
+        "type": "uint40",
+        "internalType": "uint40"
       }
     ],
     "outputs": [],
@@ -113,7 +160,7 @@ export const ESCROW_ABI = [
     "name": "feeFor",
     "inputs": [
       {
-        "name": "amount",
+        "name": "total",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -157,14 +204,29 @@ export const ESCROW_ABI = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "amountEach",
         "type": "uint96",
         "internalType": "uint96"
       },
       {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
         "name": "expiry",
-        "type": "uint64",
-        "internalType": "uint64"
+        "type": "uint40",
+        "internalType": "uint40"
+      },
+      {
+        "name": "slots",
+        "type": "uint24",
+        "internalType": "uint24"
+      },
+      {
+        "name": "claimed",
+        "type": "uint24",
+        "internalType": "uint24"
       },
       {
         "name": "status",
@@ -196,6 +258,45 @@ export const ESCROW_ABI = [
         "name": "",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "quote",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amountEach",
+        "type": "uint96",
+        "internalType": "uint96"
+      },
+      {
+        "name": "slots",
+        "type": "uint24",
+        "internalType": "uint24"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "tokenTotal",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "fee",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -235,25 +336,6 @@ export const ESCROW_ABI = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "totalFor",
-    "inputs": [
-      {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -327,6 +409,12 @@ export const ESCROW_ABI = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      },
+      {
+        "name": "remaining",
+        "type": "uint24",
+        "indexed": false,
+        "internalType": "uint24"
       }
     ],
     "anonymous": false
@@ -348,16 +436,28 @@ export const ESCROW_ABI = [
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "token",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amountEach",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "expiry",
-        "type": "uint64",
+        "name": "slots",
+        "type": "uint24",
         "indexed": false,
-        "internalType": "uint64"
+        "internalType": "uint24"
+      },
+      {
+        "name": "expiry",
+        "type": "uint40",
+        "indexed": false,
+        "internalType": "uint40"
       }
     ],
     "anonymous": false
@@ -427,6 +527,27 @@ export const ESCROW_ABI = [
   },
   {
     "type": "error",
+    "name": "AlreadyClaimed",
+    "inputs": [
+      {
+        "name": "linkId",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "BadSlots",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "ExpiryInPast",
     "inputs": []
   },
@@ -452,8 +573,8 @@ export const ESCROW_ABI = [
     "inputs": [
       {
         "name": "expiry",
-        "type": "uint64",
-        "internalType": "uint64"
+        "type": "uint40",
+        "internalType": "uint40"
       }
     ]
   },
@@ -492,6 +613,11 @@ export const ESCROW_ABI = [
     "type": "error",
     "name": "TransferFailed",
     "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
       {
         "name": "to",
         "type": "address",

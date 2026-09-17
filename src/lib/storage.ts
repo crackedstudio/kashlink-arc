@@ -5,8 +5,14 @@ export interface StoredLink {
   key: Hex
   /** Its address, which is the link's id in the escrow contract. */
   id: Hex
-  /** Native USDC wei as a decimal string; JSON has no bigint. */
+  /** Per-slot amount in the token's smallest units, as a decimal string; JSON has no bigint. */
   amount: string
+  /** Token address; absent on links from before EURC, which were all native USDC. */
+  token?: Hex
+  /** How many people can claim; absent means 1. */
+  slots?: number
+  /** Note shown to the recipient. Part of the URL, so kept here to re-share the same link. */
+  message?: string
   /** Unix seconds after which the sender can take it back. */
   expiry: number
   createdAt: number

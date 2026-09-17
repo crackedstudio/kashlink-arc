@@ -1,17 +1,13 @@
-import { formatUnits, parseUnits } from 'viem'
-import { USDC_DECIMALS } from './arc'
+import { formatAmount, parseAmount, USDC } from './tokens'
 
-/** Native USDC wei → "$5.00". Sub-cent amounts keep the digits that make them non-zero. */
+/** Native USDC wei → "$5.00". */
 export function formatUsdc(wei: bigint): string {
-  const usd = Number(formatUnits(wei, USDC_DECIMALS))
-  const digits = usd > 0 && usd < 0.01 ? 4 : 2
-  return usd.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: digits, maximumFractionDigits: digits })
+  return formatAmount(wei, USDC)
 }
 
 /** "5", "5.5", "0.10" → native wei. Throws on anything that is not a plain decimal. */
 export function parseUsdc(input: string): bigint {
-  if (!/^\d+(\.\d+)?$/.test(input)) throw new Error(`Not an amount: ${input}`)
-  return parseUnits(input, USDC_DECIMALS)
+  return parseAmount(input, USDC)
 }
 
 /** "0x1234…abcd" */
