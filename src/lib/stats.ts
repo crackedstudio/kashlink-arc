@@ -7,7 +7,7 @@ import { NATIVE, type Token, tokenByAddress, TOKENS } from './tokens'
  * the page reads the same logs anyone can read on the explorer.
  */
 
-export interface TokenStats {
+interface TokenStats {
   token: Token
   /** Sum of `amountEach × slots` over created links. */
   sent: bigint
@@ -38,7 +38,7 @@ export interface Stats {
   recent: RecentEvent[]
 }
 
-export interface RecentEvent {
+interface RecentEvent {
   kind: 'created' | 'claimed' | 'refunded'
   token: Token
   amount: bigint

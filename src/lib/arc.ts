@@ -10,9 +10,6 @@ import { arc, arcTestnet } from 'viem/chains'
  * 0x3600…0000; nothing here touches it, so the two can never be mixed up.
  */
 
-/** Native USDC has 18 decimals on Arc (the ERC-20 view has 6 — unused here). */
-export const USDC_DECIMALS = 18
-
 /** `npm run dev` targets testnet; production builds target mainnet, unless overridden. */
 const NETWORK: 'mainnet' | 'testnet' = (import.meta.env.VITE_ARC_NETWORK
   || (import.meta.env.DEV ? 'testnet' : 'mainnet')) as 'mainnet' | 'testnet'

@@ -1,5 +1,5 @@
 import { createWalletClient, custom, type EIP1193Provider, type Hex, type WalletClient } from 'viem'
-import { addChainParams, CHAIN, rpc } from './arc'
+import { addChainParams, CHAIN } from './arc'
 
 /**
  * The sender's wallet: whichever EVM wallet is installed in the browser — MetaMask, Rabby, Coinbase
@@ -82,11 +82,6 @@ async function switchToArc(provider: EIP1193Provider) {
     if (code !== 4902 && !/unrecognized|not added|4902/i.test(String((error as Error).message))) throw error
     await provider.request({ method: 'wallet_addEthereumChain', params: [addChainParams()] })
   }
-}
-
-/** Native USDC balance, 18 decimals. */
-export function getBalance(address: Hex): Promise<bigint> {
-  return rpc.getBalance({ address })
 }
 
 export function isUserRejection(error: unknown): boolean {
