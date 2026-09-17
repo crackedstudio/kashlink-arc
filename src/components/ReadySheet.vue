@@ -1,27 +1,39 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import QRCode from 'qrcode'
+import { computed, onMounted, ref, watch } from 'vue'
 import { track } from '../lib/analytics'
 import { txUrl } from '../lib/arc'
-import { formatCountdown, formatDate, formatUsdc } from '../lib/format'
-import { chainState, isExpired, linkUrl, refreshStatuses, refundLink } from '../lib/links'
+import { formatCountdown, formatDate } from '../lib/format'
+import { chainState, isExpired, linkUrl, refreshStatuses, refundLink, unclaimedAmount } from '../lib/links'
 import { saveLink, type StoredLink } from '../lib/storage'
+import { formatAmount, NATIVE, tokenByAddress } from '../lib/tokens'
 import { type Connected, discoverWallets, type DiscoveredWallet, errorMessage } from '../lib/wallet'
 import Icon from './Icon.vue'
 
 const props = defineProps<{ link: StoredLink, wallet: Connected | null }>()
 const emit = defineEmits<{ close: [], connect: [wallet: DiscoveredWallet] }>()
 
-const url = computed(() => linkUrl(props.link.key))
-const amountText = computed(() => formatUsdc(BigInt(props.link.amount)))
-const shareText = computed(() => `I sent you ${amountText.value} in USDC with a KashLink. Open it to claim:`)
+const token = computed(() => tokenByAddress(props.link.token ?? NATIVE))
+const slots = computed(() => props.link.slots ?? 1)
+const isDrop = computed(() => slots.value > 1)
+const url = computed(() => linkUrl(props.link.key, props.link.message))
+const eachText = computed(() => formatAmount(BigInt(props.link.amount), token.value))
+const totalText = computed(() => formatAmount(BigInt(props.link.amount) * BigInt(slots.value), token.value))
+const shareText = computed(() => (isDrop.value
+  ? `I'm sharing ${totalText.value} in ${token.value.symbol} with ${slots.value} people — ${eachText.value} each, first come first served. Open the KashLink to claim yours:`
+  : `I sent you ${eachText.value} in ${token.value.symbol} with a KashLink. Open it to claim:`))
 const whatsappUrl = computed(() => `https://wa.me/?text=${encodeURIComponent(`${shareText.value} ${url.value}`)}`)
 
 const state = computed(() => chainState[props.link.id])
 const status = computed(() => props.link.settled ?? state.value?.status ?? 'unknown')
 const expired = computed(() => !!state.value && isExpired(state.value))
 const expiry = computed(() => state.value?.expiry ?? props.link.expiry)
+const claimedCount = computed(() => state.value?.claimed ?? 0)
+const refundable = computed(() => (state.value ? formatAmount(unclaimedAmount(state.value), token.value) : totalText.value))
 
 const copied = ref(false)
+const showQr = ref(false)
+const qrSvg = ref('')
 const confirmRefund = ref(false)
 const refunding = ref(false)
 const refundTx = ref<string | null>(null)
@@ -29,6 +41,10 @@ const error = ref<string | null>(null)
 
 onMounted(() => {
   refreshStatuses([props.link]).catch(() => {})
+})
+
+watch(showQr, async (on) => {
+  if (on && !qrSvg.value) qrSvg.value = await QRCode.toString(url.value, { type: 'svg', margin: 0, errorCorrectionLevel: 'M' })
 })
 
 async function copy() {
@@ -65,7 +81,7 @@ async function refund() {
   if (!props.wallet) {
     const wallets = discoverWallets()
     if (wallets.length === 1) emit('connect', wallets[0])
-    else error.value = 'Connect the wallet that created this link to take the USDC back.'
+    else error.value = 'Connect the wallet that created this link to take the money back.'
     return
   }
   if (!confirmRefund.value) {
@@ -78,7 +94,7 @@ async function refund() {
     refundTx.value = await refundLink(props.wallet.client, props.link.id)
     saveLink({ ...props.link, settled: 'refunded' })
     chainState[props.link.id] = { ...state.value!, status: 'refunded' }
-    track('link_refunded', BigInt(props.link.amount), props.link.id)
+    track('link_refunded', state.value ? unclaimedAmount(state.value) : BigInt(props.link.amount), props.link.id)
   }
   catch (e) {
     error.value = errorMessage(e)
@@ -96,16 +112,20 @@ async function refund() {
       <div class="handle" />
 
       <span class="badge" :class="{ done: status === 'claimed' || status === 'refunded' }">
-        <Icon :name="status === 'claimed' || status === 'refunded' ? 'check' : 'link'" :size="26" />
+        <Icon :name="status === 'claimed' || status === 'refunded' ? 'check' : isDrop ? 'drop' : 'link'" :size="26" />
       </span>
       <p class="heading">
-        {{ status === 'refunded' ? 'KashLink returned' : status === 'claimed' ? 'KashLink claimed' : 'Your KashLink is ready!' }}
+        {{ status === 'refunded' ? 'KashLink returned' : status === 'claimed' ? (isDrop ? 'Drop fully claimed' : 'KashLink claimed') : isDrop ? 'Your drop is live!' : 'Your KashLink is ready!' }}
       </p>
       <div class="amount">
-        {{ amountText }}
+        {{ eachText }}<span v-if="isDrop" class="each">each · {{ slots }} people</span>
       </div>
+      <p v-if="link.message" class="note">
+        “{{ link.message }}”
+      </p>
       <p class="date muted">
         {{ formatDate(link.createdAt) }}
+        <template v-if="isDrop && state"> · {{ claimedCount }} of {{ slots }} claimed</template>
         <template v-if="status === 'pending'"> · {{ expired ? 'returnable now' : `returnable ${formatCountdown(expiry)}` }}</template>
       </p>
 
@@ -115,6 +135,9 @@ async function refund() {
         </p>
         <div class="url-row">
           <span class="url">{{ url }}</span>
+          <button class="icon-btn" :class="{ on: showQr }" aria-label="Show QR code" @click="showQr = !showQr">
+            <Icon name="qr" :size="22" />
+          </button>
           <a class="icon-btn whatsapp" :href="whatsappUrl" target="_blank" rel="noopener" aria-label="Share on WhatsApp">
             <Icon name="whatsapp" :size="22" />
           </a>
@@ -122,6 +145,7 @@ async function refund() {
             <Icon :name="copied ? 'check' : 'copy'" :size="22" />
           </button>
         </div>
+        <div v-if="showQr && qrSvg" class="qr" v-html="qrSvg" />
 
         <p class="warning muted">
           <Icon name="alert" :size="18" /> Anyone with this link can claim the cash.
@@ -138,14 +162,14 @@ async function refund() {
             <span class="spinner" /> Returning…
           </template>
           <template v-else>
-            {{ confirmRefund ? `Tap again to return ${amountText}` : 'Return to my wallet' }}
+            {{ confirmRefund ? `Tap again to return ${refundable}` : `Return ${refundable} to my wallet` }}
           </template>
         </button>
       </template>
 
       <template v-else>
         <p class="warning muted center">
-          {{ status === 'refunded' ? 'The USDC is back in your wallet.' : 'The USDC was claimed.' }} This link no longer works.
+          {{ status === 'refunded' ? `The ${token.symbol} is back in your wallet.` : isDrop ? `All ${slots} people have claimed.` : `The ${token.symbol} was claimed.` }} This link no longer works.
         </p>
         <a v-if="refundTx" class="link-btn tx" :href="txUrl(refundTx)" target="_blank" rel="noopener">
           View transaction <Icon name="external" :size="14" />
@@ -194,6 +218,20 @@ async function refund() {
   text-align: center;
 }
 
+.each {
+  margin-left: 8px;
+  color: var(--muted-2);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.note {
+  margin-top: 8px;
+  font-size: 15px;
+  font-style: italic;
+  text-align: center;
+}
+
 .date {
   margin: 4px 0 20px;
   font-size: 13px;
@@ -227,7 +265,7 @@ async function refund() {
   display: grid;
   flex: none;
   place-items: center;
-  width: 44px;
+  width: 40px;
   height: 48px;
   border: 0;
   background: none;
@@ -239,8 +277,24 @@ async function refund() {
   color: #25d366;
 }
 
-.icon-btn.copied {
+.icon-btn.copied,
+.icon-btn.on {
   color: var(--nq-green);
+}
+
+.qr {
+  width: 180px;
+  margin: 14px auto 0;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: var(--shadow-card);
+}
+
+.qr :deep(svg) {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 .warning {

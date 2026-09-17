@@ -17,9 +17,9 @@ defineProps<{
 const emit = defineEmits<{ connect: [wallet: DiscoveredWallet], next: [], showLinks: [] }>()
 
 const steps = [
-  { title: 'Put USDC in a KashLink', text: 'From your wallet on Arc' },
-  { title: 'Share the link', text: 'Anyone with the link can claim the cash' },
-  { title: 'Your friend receives the USDC', text: 'When they open your link — no wallet setup, no gas' },
+  { title: 'Put USDC or EURC in a KashLink', text: 'For one person, or a drop the first few to open it share' },
+  { title: 'Share the link', text: 'Chat, QR code, or a note on the link — anyone holding it can claim' },
+  { title: 'They receive the money', text: 'When they open it — no wallet setup, no gas, instant' },
 ]
 
 const wallets = ref<DiscoveredWallet[]>([])
@@ -49,7 +49,7 @@ function choose(wallet: DiscoveredWallet) {
       <span v-if="!IS_MAINNET" class="net">{{ CHAIN.name }}</span>
     </div>
     <h1 class="title intro-title">
-      Send USDC as a link
+      Send stablecoins as a link
     </h1>
     <p class="subtitle muted">
       No address, no account, no gas. Whoever opens the link keeps the money.

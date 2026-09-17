@@ -2,10 +2,11 @@
 import type { Hex } from 'viem'
 import { computed, onMounted, ref, watch } from 'vue'
 import { track } from '../lib/analytics'
-import { formatCountdown, formatDate, formatUsdc } from '../lib/format'
-import { chainState, isExpired, linksFundedBy, type LinkStatus, readLink, refreshStatuses, refundLink } from '../lib/links'
+import { formatCountdown, formatDate } from '../lib/format'
+import { chainState, isExpired, linksFundedBy, type LinkStatus, readLink, refreshStatuses, refundLink, unclaimedAmount } from '../lib/links'
 import type { StoredLink } from '../lib/storage'
 import { saveLink } from '../lib/storage'
+import { formatAmount, NATIVE, type Token, tokenByAddress } from '../lib/tokens'
 import { type Connected, discoverWallets, type DiscoveredWallet, errorMessage } from '../lib/wallet'
 import Icon from './Icon.vue'
 
@@ -20,9 +21,24 @@ const labels: Record<LinkStatus, string> = { unknown: '—', pending: 'Unclaimed
  */
 interface Row {
   id: Hex
-  amount: bigint
+  token: Token
+  amountEach: bigint
+  slots: number
   createdAt: number | null
   stored: StoredLink | null
+}
+
+/** Per-token totals, since dollars and euros cannot be added. */
+function sumByToken(rows: Row[], of: (row: Row) => bigint): string {
+  const totals = new Map<Token, bigint>()
+  for (const row of rows) totals.set(row.token, (totals.get(row.token) ?? 0n) + of(row))
+  return [...totals].filter(([, v]) => v > 0n).map(([t, v]) => formatAmount(v, t)).join(' + ')
+}
+
+/** What a refund of this row would return right now. */
+function unclaimedOf(row: Row): bigint {
+  const state = chainState[row.id]
+  return state ? unclaimedAmount(state) : row.amountEach * BigInt(row.slots)
 }
 
 const loading = ref(true)
@@ -32,7 +48,14 @@ const notice = ref<string | null>(null)
 const fromChain = ref<Row[]>([])
 
 const rows = computed<Row[]>(() => {
-  const local = props.links.map<Row>(l => ({ id: l.id, amount: BigInt(l.amount), createdAt: l.createdAt, stored: l }))
+  const local = props.links.map<Row>(l => ({
+    id: l.id,
+    token: tokenByAddress(l.token ?? NATIVE),
+    amountEach: BigInt(l.amount),
+    slots: l.slots ?? 1,
+    createdAt: l.createdAt,
+    stored: l,
+  }))
   const known = new Set(local.map(r => r.id.toLowerCase()))
   return [...local, ...fromChain.value.filter(r => !known.has(r.id.toLowerCase()))]
 })
@@ -43,15 +66,15 @@ function statusOf(row: Row): LinkStatus {
 
 const claimed = computed(() => rows.value.filter(r => statusOf(r) === 'claimed').length)
 const outstanding = computed(() => rows.value.filter(r => statusOf(r) === 'pending'))
-const outstandingTotal = computed(() => outstanding.value.reduce((sum, r) => sum + r.amount, 0n))
+const outstandingTotal = computed(() => sumByToken(outstanding.value, unclaimedOf))
 const expired = computed(() => rows.value.filter(r => chainState[r.id] && isExpired(chainState[r.id])))
-const expiredTotal = computed(() => expired.value.reduce((sum, r) => sum + r.amount, 0n))
+const expiredTotal = computed(() => sumByToken(expired.value, unclaimedOf))
 
 async function loadFromChain() {
   if (!props.wallet) return
   try {
     const found = await linksFundedBy(props.wallet.address)
-    fromChain.value = found.map(l => ({ id: l.id, amount: l.amount, createdAt: null, stored: null }))
+    fromChain.value = found.map(l => ({ id: l.id, token: l.token, amountEach: l.amountEach, slots: l.slots, createdAt: null, stored: null }))
     // Statuses for the ones this device did not know about.
     const known = new Set(props.links.map(l => l.id.toLowerCase()))
     await Promise.all(found.filter(l => !known.has(l.id.toLowerCase())).map(async (l) => {
@@ -80,23 +103,24 @@ async function refund(targets: Row[], key: string) {
   refunding.value = key
   error.value = null
   notice.value = null
-  let returned = 0n
+  const returned: Row[] = []
   let failed = 0
   // One at a time: each is a wallet prompt, and a failure must not stop the rest.
   for (const row of targets) {
     try {
+      const amount = unclaimedOf(row)
       await refundLink(props.wallet.client, row.id)
       if (row.stored) saveLink({ ...row.stored, settled: 'refunded' })
       chainState[row.id] = { ...chainState[row.id], status: 'refunded' }
-      track('link_refunded', row.amount, row.id)
-      returned += row.amount
+      track('link_refunded', amount, row.id)
+      returned.push(row)
     }
     catch (e) {
       failed++
       if (targets.length === 1) error.value = errorMessage(e)
     }
   }
-  if (returned) notice.value = `Returned ${formatUsdc(returned)} to your wallet.`
+  if (returned.length) notice.value = `Returned ${sumByToken(returned, unclaimedOf)} to your wallet.`
   if (failed && targets.length > 1) error.value = `${failed} link${failed > 1 ? 's' : ''} could not be returned. Try again in a moment.`
   refunding.value = null
   emit('changed')
@@ -114,7 +138,7 @@ async function refund(targets: Row[], key: string) {
         </template>
         <template v-else>
           {{ claimed }} of {{ rows.length }} claimed
-          <template v-if="outstandingTotal"> · <strong>{{ formatUsdc(outstandingTotal) }}</strong> still out there</template>
+          <template v-if="outstandingTotal"> · <strong>{{ outstandingTotal }}</strong> still out there</template>
         </template>
       </p>
 
@@ -128,7 +152,7 @@ async function refund(targets: Row[], key: string) {
             <span class="spinner" /> Returning…
           </template>
           <template v-else>
-            Return {{ formatUsdc(expiredTotal) }}
+            Return {{ expiredTotal }}
           </template>
         </button>
       </div>
@@ -147,10 +171,11 @@ async function refund(targets: Row[], key: string) {
         <li v-for="row in rows" :key="row.id">
           <button class="row" :disabled="!row.stored" @click="row.stored && emit('open', row.stored)">
             <span class="info">
-              <strong>{{ formatUsdc(row.amount) }}</strong>
+              <strong>{{ formatAmount(row.amountEach, row.token) }}<template v-if="row.slots > 1"> × {{ row.slots }}</template></strong>
               <span class="muted">
                 <template v-if="row.createdAt">{{ formatDate(row.createdAt) }}</template>
                 <template v-else>From another device · can't re-share</template>
+                <template v-if="row.slots > 1 && chainState[row.id]"> · {{ chainState[row.id].claimed }} of {{ row.slots }} claimed</template>
                 <template v-if="statusOf(row) === 'pending' && chainState[row.id]"> · {{ isExpired(chainState[row.id]) ? 'returnable now' : `returnable ${formatCountdown(chainState[row.id].expiry)}` }}</template>
               </span>
             </span>

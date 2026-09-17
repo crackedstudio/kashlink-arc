@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineProps<{
-  name: 'back' | 'info' | 'alert' | 'copy' | 'check' | 'backspace' | 'chevron' | 'help' | 'dollar' | 'whatsapp' | 'link' | 'share' | 'wallet' | 'clock' | 'external'
+  name: 'back' | 'info' | 'alert' | 'copy' | 'check' | 'backspace' | 'chevron' | 'help' | 'dollar' | 'whatsapp' | 'link' | 'share' | 'wallet' | 'clock' | 'external' | 'drop' | 'qr' | 'chart'
   size?: number
 }>()
 </script>
@@ -46,6 +46,15 @@ defineProps<{
     </template>
     <template v-else-if="name === 'clock'">
       <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+    </template>
+    <template v-else-if="name === 'drop'">
+      <circle cx="12" cy="6" r="3" /><circle cx="5" cy="17" r="3" /><circle cx="19" cy="17" r="3" /><path d="M12 9v3M12 12l-5 2.5M12 12l5 2.5" />
+    </template>
+    <template v-else-if="name === 'qr'">
+      <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 14h3v3h-3zM20 14v.01M17 20h.01M20 17v4h-3" />
+    </template>
+    <template v-else-if="name === 'chart'">
+      <path d="M4 20V10M10 20V4M16 20v-8M22 20H2" />
     </template>
     <template v-else-if="name === 'external'">
       <path d="M14 4h6v6M20 4l-9 9" /><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" />

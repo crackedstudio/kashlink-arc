@@ -2,7 +2,8 @@
 import { computed, ref } from 'vue'
 import { addressUrl } from '../lib/arc'
 import { formatUsdc, shortAddress } from '../lib/format'
-import { EXPIRY_OPTIONS, type Quote } from '../lib/links'
+import { EXPIRY_OPTIONS, MAX_MESSAGE, type Quote } from '../lib/links'
+import { formatAmount, isNative } from '../lib/tokens'
 import Icon from './Icon.vue'
 
 const props = defineProps<{
@@ -11,12 +12,23 @@ const props = defineProps<{
   linkId: string
   walletName: string
   sending: boolean
+  approving: boolean
   error: string | null
 }>()
 const emit = defineEmits<{ back: [], send: [] }>()
+const message = defineModel<string>('message', { default: '' })
 
 const showHelp = ref(false)
+const token = computed(() => props.quote.token)
+const native = computed(() => isNative(token.value))
+const isDrop = computed(() => props.quote.slots > 1)
 const expiryLabel = computed(() => EXPIRY_OPTIONS.find(o => o.seconds === props.expirySeconds)?.label ?? `${Math.round(props.expirySeconds / 86_400)} days`)
+const gasText = computed(() => formatUsdc(props.quote.stipend * BigInt(props.quote.slots)))
+/** What leaves the wallet, in words: one figure for USDC, two for EURC (token plus USDC gas). */
+const totalText = computed(() => (native.value
+  ? formatAmount(props.quote.value, token.value)
+  : `${formatAmount(props.quote.tokenTotal, token.value)} + ${gasText.value}`))
+const buttonText = computed(() => (native.value ? `Send ${totalText.value}` : `Send ${formatAmount(props.quote.tokenTotal, token.value)}`))
 </script>
 
 <template>
@@ -29,31 +41,36 @@ const expiryLabel = computed(() => EXPIRY_OPTIONS.find(o => o.seconds === props.
     </h1>
 
     <div class="summary">
-      <span class="badge"><Icon name="link" :size="30" /></span>
+      <span class="badge"><Icon :name="isDrop ? 'drop' : 'link'" :size="30" /></span>
       <p class="to muted">
-        Sending to
+        {{ isDrop ? `A drop for ${quote.slots} people` : 'Sending to' }}
       </p>
       <strong class="name">KashLink</strong>
       <div class="primary">
-        {{ formatUsdc(quote.amount) }}
+        {{ formatAmount(quote.amountEach, token) }}<span v-if="isDrop" class="each">each</span>
       </div>
       <a class="muted secondary" :href="addressUrl(linkId)" target="_blank" rel="noopener">
         {{ shortAddress(linkId) }} <Icon name="external" :size="12" />
       </a>
     </div>
 
+    <label class="note">
+      <span class="label">Add a note <span class="muted">(optional)</span></span>
+      <input v-model="message" type="text" :maxlength="MAX_MESSAGE" placeholder="Happy birthday!" :disabled="sending" autocomplete="off">
+    </label>
+
     <div class="card details">
       <div class="row">
-        <span class="muted">Your friend receives</span>
-        <strong>{{ formatUsdc(quote.amount) }}</strong>
+        <span class="muted">{{ isDrop ? `${quote.slots} people receive` : 'Your friend receives' }}</span>
+        <strong>{{ formatAmount(quote.total, token) }}</strong>
       </div>
       <div class="row">
         <span class="muted">Service fee</span>
-        <strong>{{ quote.fee ? formatUsdc(quote.fee) : 'Free' }}</strong>
+        <strong>{{ quote.fee ? formatAmount(quote.fee, token) : 'Free' }}</strong>
       </div>
       <div class="row">
-        <span class="muted">Claim gas, prepaid</span>
-        <strong>{{ formatUsdc(quote.stipend) }}</strong>
+        <span class="muted">Claim gas, prepaid{{ isDrop ? ` · ${quote.slots} ×` : '' }}</span>
+        <strong>{{ gasText }}</strong>
       </div>
       <div class="row">
         <span class="muted">Returnable if unclaimed</span>
@@ -65,12 +82,13 @@ const expiryLabel = computed(() => EXPIRY_OPTIONS.find(o => o.seconds === props.
             <Icon name="help" :size="18" />
           </button>
         </span>
-        <strong>{{ formatUsdc(quote.total) }}</strong>
+        <strong>{{ totalText }}</strong>
       </div>
       <p v-if="showHelp" class="help muted">
-        The USDC sits in the KashLink escrow contract on Arc until your friend claims it. The prepaid
-        gas lets them claim without owning anything first. The fee is charged now, whether the link
-        is claimed or returned.
+        The {{ token.symbol }} sits in the KashLink escrow contract on Arc until it is claimed. The
+        prepaid gas is USDC placed on the link itself, so whoever opens it can claim without owning
+        anything first. The fee is charged now, whether the link is claimed or returned.
+        <template v-if="!native">Sending EURC takes two confirmations: one to approve, one to deposit.</template>
       </p>
     </div>
 
@@ -78,11 +96,14 @@ const expiryLabel = computed(() => EXPIRY_OPTIONS.find(o => o.seconds === props.
       {{ error }}
     </p>
     <button class="btn btn-primary" :disabled="sending" @click="emit('send')">
-      <template v-if="sending">
+      <template v-if="approving">
+        <span class="spinner" /> Approve {{ token.symbol }} in {{ walletName }}…
+      </template>
+      <template v-else-if="sending">
         <span class="spinner" /> Confirm in {{ walletName }}…
       </template>
       <template v-else>
-        Send {{ formatUsdc(quote.total) }}
+        {{ buttonText }}
       </template>
     </button>
   </main>
@@ -95,7 +116,7 @@ const expiryLabel = computed(() => EXPIRY_OPTIONS.find(o => o.seconds === props.
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 16px 0;
+  padding: 10px 0;
   text-align: center;
 }
 
@@ -122,11 +143,18 @@ const expiryLabel = computed(() => EXPIRY_OPTIONS.find(o => o.seconds === props.
 }
 
 .primary {
-  margin-top: 18px;
+  margin-top: 14px;
   font-size: 44px;
   font-weight: 800;
   line-height: 1.1;
   letter-spacing: -0.02em;
+}
+
+.each {
+  margin-left: 8px;
+  color: var(--muted-2);
+  font-size: 20px;
+  font-weight: 700;
 }
 
 .secondary {
@@ -139,6 +167,37 @@ const expiryLabel = computed(() => EXPIRY_OPTIONS.find(o => o.seconds === props.
   text-decoration: none;
 }
 
+.note {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.note .label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.note input {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 500px;
+  background: var(--highlight);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+
+.note input:focus {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.note input::placeholder {
+  color: var(--muted-2);
+}
+
 .details {
   margin-bottom: 14px;
   padding: 4px 16px;
@@ -148,8 +207,9 @@ const expiryLabel = computed(() => EXPIRY_OPTIONS.find(o => o.seconds === props.
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 42px;
-  font-size: 15px;
+  gap: 12px;
+  min-height: 40px;
+  font-size: 14px;
 }
 
 .row + .row {
@@ -158,6 +218,7 @@ const expiryLabel = computed(() => EXPIRY_OPTIONS.find(o => o.seconds === props.
 
 .row strong {
   font-weight: 700;
+  text-align: right;
 }
 
 .total {

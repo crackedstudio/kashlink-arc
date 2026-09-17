@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { Hex } from 'viem'
 import { computed, onMounted, ref } from 'vue'
 import AmountScreen from './components/AmountScreen.vue'
 import ClaimScreen from './components/ClaimScreen.vue'
@@ -10,42 +9,50 @@ import ReviewScreen from './components/ReviewScreen.vue'
 import { track } from './lib/analytics'
 import { ESCROW_CONFIGURED } from './lib/arc'
 import {
-  chainState, createLink, EXPIRY_OPTIONS, feeParams, type FeeParams, isExpired, keyFromHash, newLink,
-  type NewLink, quoteWith, refreshStatuses,
+  chainState, createLink, EXPIRY_OPTIONS, feeParams, type FeeParams, isExpired, newLink,
+  type NewLink, parseHash, type ParsedHash, quoteWith, refreshStatuses,
 } from './lib/links'
 import { loadLinks, removeLink, saveLink, type StoredLink } from './lib/storage'
-import { type Connected, connect, connected, type DiscoveredWallet, errorMessage, getBalance, isUserRejection } from './lib/wallet'
+import { getTokenBalance, type Token, USDC } from './lib/tokens'
+import { type Connected, connect, connected, type DiscoveredWallet, errorMessage, isUserRejection } from './lib/wallet'
 
 type Screen = 'intro' | 'amount' | 'review' | 'claim'
 
-const claimKey = ref<Hex | null>(keyFromHash(location.hash))
-const screen = ref<Screen>(claimKey.value ? 'claim' : 'intro')
+const claimLink = ref<ParsedHash | null>(parseHash(location.hash))
+const screen = ref<Screen>(claimLink.value ? 'claim' : 'intro')
 
 const wallet = ref<Connected | null>(connected())
 const walletError = ref<string | null>(null)
 const connecting = ref(false)
+/** Balance of the chosen token, plus native USDC (which always pays the stipends). */
 const balance = ref<bigint | null>(null)
+const usdcBalance = ref<bigint | null>(null)
 const fees = ref<FeeParams | null>(null)
 
+const token = ref<Token>(USDC)
 const amount = ref(0n)
+const slots = ref(1)
+const message = ref('')
 const expirySeconds = ref<number>(EXPIRY_OPTIONS[1].seconds)
 /** Generated when the review screen opens; funded when the user taps Send. */
 const pendingLink = ref<NewLink | null>(null)
 const sending = ref(false)
+/** True while the wallet is showing the EURC approval, which precedes the deposit. */
+const approving = ref(false)
 const sendError = ref<string | null>(null)
 
 const links = ref<StoredLink[]>(loadLinks())
 const readyLink = ref<StoredLink | null>(null)
 const showLinks = ref(false)
 const expiredCount = computed(() => links.value.filter(l => chainState[l.id] && isExpired(chainState[l.id])).length)
-const quote = computed(() => (fees.value ? quoteWith(fees.value, amount.value) : null))
+const quote = computed(() => (fees.value ? quoteWith(fees.value, token.value, amount.value, slots.value) : null))
 
 onMounted(() => {
   // Opening another KashLink while one is already open only changes the #hash, without a reload.
   window.addEventListener('hashchange', () => {
-    const key = keyFromHash(location.hash)
-    if (!key) return
-    claimKey.value = key
+    const parsed = parseHash(location.hash)
+    if (!parsed) return
+    claimLink.value = parsed
     readyLink.value = null
     showLinks.value = false
     screen.value = 'claim'
@@ -60,13 +67,27 @@ onMounted(() => {
 async function loadBalance() {
   if (!wallet.value) return
   const address = wallet.value.address
+  const forToken = token.value
   try {
-    const value = await getBalance(address)
-    if (wallet.value?.address === address) balance.value = value
+    const [usdc, chosen] = await Promise.all([
+      getTokenBalance(USDC, address),
+      forToken === USDC ? null : getTokenBalance(forToken, address),
+    ])
+    if (wallet.value?.address !== address || token.value !== forToken) return
+    usdcBalance.value = usdc
+    balance.value = chosen ?? usdc
   }
   catch {
     balance.value = null
   }
+}
+
+function selectToken(next: Token) {
+  if (next === token.value) return
+  token.value = next
+  amount.value = 0n
+  balance.value = null
+  loadBalance()
 }
 
 async function connectWallet(choice: DiscoveredWallet) {
@@ -90,8 +111,9 @@ function startCreate() {
   loadBalance()
 }
 
-function onAmount(wei: bigint, expiry: number) {
-  amount.value = wei
+function onAmount(units: bigint, count: number, expiry: number) {
+  amount.value = units
+  slots.value = count
   expirySeconds.value = expiry
   sendError.value = null
   // Generate the key now, so the review screen can show where the money is going before it moves.
@@ -102,23 +124,28 @@ function onAmount(wei: bigint, expiry: number) {
 async function send() {
   const link = pendingLink.value
   const w = wallet.value
-  if (!link || !w) return
+  const q = quote.value
+  if (!link || !w || !q) return
   sending.value = true
+  approving.value = false
   sendError.value = null
   const stored: StoredLink = {
     key: link.key,
     id: link.id,
     amount: amount.value.toString(),
+    token: token.value.address,
+    slots: slots.value,
+    message: message.value.trim() || undefined,
     expiry: Math.floor(Date.now() / 1000) + expirySeconds.value,
     createdAt: Date.now(),
   }
   try {
-    // Persist the key before any USDC moves, so the link can always be re-shared.
+    // Persist the key before any money moves, so the link can always be re-shared.
     saveLink(stored)
-    const fundingTx = await createLink(w.client, link, amount.value, expirySeconds.value)
+    const fundingTx = await createLink(w.client, link, q, expirySeconds.value, () => (approving.value = true))
     const funded = { ...stored, fundingTx }
     saveLink(funded)
-    track('link_created', amount.value, link.id)
+    track('link_created', q.total, link.id)
     links.value = loadLinks()
     readyLink.value = funded
     pendingLink.value = null
@@ -132,6 +159,7 @@ async function send() {
   }
   finally {
     sending.value = false
+    approving.value = false
   }
 }
 
@@ -147,26 +175,26 @@ function closeReady() {
 
 function finishClaim() {
   history.replaceState(null, '', location.pathname + location.search)
-  claimKey.value = null
+  claimLink.value = null
   screen.value = 'intro'
 }
 </script>
 
 <template>
-  <ClaimScreen v-if="screen === 'claim' && claimKey" :key="claimKey" :link-key="claimKey" @done="finishClaim" />
+  <ClaimScreen v-if="screen === 'claim' && claimLink" :key="claimLink.key" :link-key="claimLink.key" :message="claimLink.message" @done="finishClaim" />
   <IntroScreen
     v-else-if="screen === 'intro'"
-    :wallet :connecting :wallet-error :balance
+    :wallet :connecting :wallet-error :balance="usdcBalance"
     :link-count="links.length" :expired-count="expiredCount"
     @connect="connectWallet" @next="startCreate" @show-links="showLinks = true"
   />
   <AmountScreen
-    v-else-if="screen === 'amount'" :balance :fees :expiry-seconds="expirySeconds"
-    @back="screen = 'intro'" @retry="loadBalance" @continue="onAmount"
+    v-else-if="screen === 'amount'" :token :balance :usdc-balance :fees :slots :expiry-seconds="expirySeconds"
+    @back="screen = 'intro'" @retry="loadBalance" @update:token="selectToken" @continue="onAmount"
   />
   <ReviewScreen
-    v-else-if="quote && pendingLink" :quote :expiry-seconds="expirySeconds" :link-id="pendingLink.id"
-    :wallet-name="wallet?.wallet.name ?? 'your wallet'" :sending :error="sendError"
+    v-else-if="quote && pendingLink" v-model:message="message" :quote :expiry-seconds="expirySeconds" :link-id="pendingLink.id"
+    :wallet-name="wallet?.wallet.name ?? 'your wallet'" :sending :approving :error="sendError"
     @back="screen = 'amount'" @send="send"
   />
 

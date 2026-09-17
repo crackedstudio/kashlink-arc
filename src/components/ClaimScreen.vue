@@ -3,13 +3,14 @@ import { type Hex, isAddress } from 'viem'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { track } from '../lib/analytics'
 import { CHAIN, ESCROW_CONFIGURED, txUrl } from '../lib/arc'
-import { formatUsdc, shortAddress } from '../lib/format'
-import { claimLink, linkGasBalance, linkIdOf, type OnChainLink, readLink } from '../lib/links'
+import { shortAddress } from '../lib/format'
+import { claimLink, hasClaimed, linkGasBalance, linkIdOf, type OnChainLink, readLink } from '../lib/links'
+import { formatAmount } from '../lib/tokens'
 import { connect, discoverWallets, errorMessage } from '../lib/wallet'
 import Icon from './Icon.vue'
 import Logo from './Logo.vue'
 
-const props = defineProps<{ linkKey: Hex }>()
+const props = defineProps<{ linkKey: Hex, message?: string }>()
 const emit = defineEmits<{ done: [] }>()
 
 /**
@@ -19,10 +20,11 @@ const emit = defineEmits<{ done: [] }>()
  * nogas      pending, but the stipend on the link address is gone
  * claiming   transaction in flight
  * success    paid out
- * claimed    somebody already took it
+ * claimed    somebody already took it (every slot, for a drop)
  * refunded   the sender took it back
+ * taken      this address already has its slot of the drop
  */
-type State = 'loading' | 'unfunded' | 'ready' | 'nogas' | 'claiming' | 'success' | 'claimed' | 'refunded'
+type State = 'loading' | 'unfunded' | 'ready' | 'nogas' | 'claiming' | 'success' | 'claimed' | 'refunded' | 'taken'
 const state = ref<State>('loading')
 const link = ref<OnChainLink | null>(null)
 const linkId = linkIdOf(props.linkKey)
@@ -34,17 +36,21 @@ const connecting = ref(false)
 const manual = ref(false)
 let pollTimer: number | undefined
 
-const amount = computed(() => (link.value ? formatUsdc(link.value.amount) : ''))
+const token = computed(() => link.value?.token)
+const amount = computed(() => (link.value ? formatAmount(link.value.amountEach, link.value.token) : ''))
+const isDrop = computed(() => (link.value?.slots ?? 1) > 1)
+const left = computed(() => (link.value ? link.value.slots - link.value.claimed : 0))
 const toValid = computed(() => isAddress(to.value.trim()))
 const heading = computed(() => ({
   loading: 'Opening KashLink…',
   unfunded: 'This KashLink is almost ready',
-  ready: 'You received cash!',
-  nogas: 'You received cash!',
-  claiming: 'You received cash!',
+  ready: isDrop.value ? 'You got a drop!' : 'You received cash!',
+  nogas: isDrop.value ? 'You got a drop!' : 'You received cash!',
+  claiming: isDrop.value ? 'You got a drop!' : 'You received cash!',
   success: 'Cash received!',
-  claimed: 'This KashLink was already claimed',
+  claimed: isDrop.value ? 'This drop is all gone' : 'This KashLink was already claimed',
   refunded: 'This KashLink was returned',
+  taken: 'You already claimed this one',
 })[state.value])
 const badgeIcon = computed(() => ({
   loading: 'link',
@@ -55,11 +61,12 @@ const badgeIcon = computed(() => ({
   success: 'check',
   claimed: 'check',
   refunded: 'back',
+  taken: 'check',
 } as const)[state.value])
 const badgeClass = computed(() => ({
   gold: state.value === 'ready' || state.value === 'nogas' || state.value === 'claiming',
   green: state.value === 'success',
-  gray: state.value === 'claimed' || state.value === 'refunded',
+  gray: state.value === 'claimed' || state.value === 'refunded' || state.value === 'taken',
 }))
 
 // A claim in flight or done must not be overwritten by a status refresh.
@@ -111,7 +118,7 @@ async function claimWithWallet() {
   const wallets = discoverWallets()
   if (!wallets.length) {
     manual.value = true
-    error.value = 'No wallet found in this browser. Paste the address you want the USDC sent to instead.'
+    error.value = 'No wallet found in this browser. Paste the address you want it sent to instead.'
     return
   }
   connecting.value = true
@@ -132,15 +139,26 @@ async function claimWithWallet() {
 
 async function claim() {
   if (!toValid.value) return
+  const recipient = to.value.trim() as Hex
   error.value = null
   state.value = 'claiming'
   try {
-    claimTx.value = await claimLink(props.linkKey, to.value.trim() as Hex)
+    // A drop gives one slot per address; say so before spending the stipend on a revert.
+    if (isDrop.value && await hasClaimed(linkId, recipient)) {
+      state.value = 'taken'
+      return
+    }
+    claimTx.value = await claimLink(props.linkKey, recipient)
     state.value = 'success'
-    if (link.value) track('link_claimed', link.value.amount, linkId)
+    if (link.value) track('link_claimed', link.value.amountEach, linkId)
   }
   catch (e) {
-    error.value = errorMessage(e)
+    const text = errorMessage(e)
+    if (/AlreadyClaimed/.test(text)) {
+      state.value = 'taken'
+      return
+    }
+    error.value = text
     state.value = 'ready'
     refresh()
   }
@@ -158,9 +176,15 @@ async function claim() {
       <p class="heading">
         {{ heading }}
       </p>
-      <div v-if="link && state !== 'unfunded'" class="amount" :class="{ muted: state === 'claimed' || state === 'refunded' }">
-        {{ amount }}<span class="unit">USDC</span>
+      <div v-if="link && state !== 'unfunded'" class="amount" :class="{ muted: state === 'claimed' || state === 'refunded' || state === 'taken' }">
+        {{ amount }}<span class="unit">{{ token?.symbol }}</span>
       </div>
+      <p v-if="message && link && state !== 'unfunded'" class="message">
+        “{{ message }}”
+      </p>
+      <p v-if="isDrop && (state === 'ready' || state === 'nogas' || state === 'claiming')" class="drop muted">
+        <Icon name="drop" :size="16" /> {{ left }} of {{ link!.slots }} left · first come, first served
+      </p>
       <p v-if="state === 'loading'" class="status muted">
         Reading the link on {{ CHAIN.name }}…
       </p>
@@ -172,13 +196,16 @@ async function claim() {
         take it back, and send a new one.
       </p>
       <p v-else-if="state === 'success'" class="status muted">
-        {{ amount }} is now in <strong>{{ shortAddress(to.trim()) }}</strong> on {{ CHAIN.name }}.
+        {{ amount }} in {{ token?.symbol }} is now in <strong>{{ shortAddress(to.trim()) }}</strong> on {{ CHAIN.name }}.
       </p>
       <p v-else-if="state === 'claimed'" class="status muted">
-        The USDC was already taken out of this link.
+        {{ isDrop ? `All ${link!.slots} slots have been claimed.` : `The ${token?.symbol} was already taken out of this link.` }}
+      </p>
+      <p v-else-if="state === 'taken'" class="status muted">
+        Each address can take one slot of a drop, and <strong>{{ shortAddress(to.trim()) }}</strong> already has its {{ amount }}.
       </p>
       <p v-else-if="state === 'refunded'" class="status muted">
-        The sender took the USDC back after the link expired.
+        The sender took the {{ token?.symbol }} back after the link expired.
       </p>
     </div>
 
@@ -198,7 +225,7 @@ async function claim() {
         </p>
       </template>
       <p v-else class="hint muted center">
-        Nothing to sign and no gas to pay — the link covers it. Your wallet only tells us where to send the USDC.
+        Nothing to sign and no gas to pay — the link covers it. Your wallet only tells us where to send the {{ token?.symbol }}.
       </p>
       <p v-if="error" class="error">
         {{ error }}
@@ -235,7 +262,7 @@ async function claim() {
         View transaction <Icon name="external" :size="14" />
       </a>
       <button class="btn btn-primary" @click="emit('done')">
-        {{ state === 'success' ? 'Done' : 'Send your own KashLink' }}
+        {{ state === 'success' || state === 'taken' ? 'Done' : 'Send your own KashLink' }}
       </button>
     </template>
     <p v-else-if="error" class="error">
@@ -318,6 +345,25 @@ async function claim() {
 
 .status strong {
   color: var(--text);
+}
+
+.message {
+  max-width: 300px;
+  margin-top: 14px;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  background: var(--highlight);
+  font-size: 15px;
+  font-style: italic;
+}
+
+.drop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .label {
