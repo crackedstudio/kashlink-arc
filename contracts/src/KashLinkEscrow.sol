@@ -3,15 +3,20 @@ pragma solidity ^0.8.30;
 
 /**
  * @title KashLinkEscrow
- * @notice Holds USDC for KashLinks — money sent as a link — on Arc.
+ * @notice Holds stablecoins for KashLinks — money sent as a link — on Arc.
  *
  * A link is a throwaway key pair. The private key travels in the link URL; its address is the link's
- * id here. The sender deposits USDC against that id, and whoever holds the link claims it by sending
- * a transaction *from* the link address. On Arc the native token is USDC, so the link address can pay
+ * id here. The sender deposits against that id, and whoever holds the link claims by sending a
+ * transaction *from* the link address. On Arc the native token is USDC, so the link address can pay
  * for its own claim: `create` forwards a small stipend to it for exactly that. No relayer, no gas
  * token, no signature scheme.
  *
- * Amounts everywhere are native USDC, 18 decimals — `msg.value` units, not the 6-decimal ERC-20 view.
+ * A link has `slots`. With one slot it is cash for one person. With more it is a drop: the first
+ * `slots` addresses to open it each get `amountEach`, and the sender takes back whatever is left
+ * after expiry. Every slot carries its own stipend, so every claim has gas.
+ *
+ * A link carries either native USDC (`token == address(0)`, 18-decimal `msg.value` units) or an
+ * ERC-20 such as EURC (`token` set, the token's own decimals). The stipend is always native USDC.
  *
  * What the owner can do: change the fee rate (capped at 5%), the fee floor, and the treasury address,
  * and hand ownership over. What the owner cannot do: touch escrowed funds, pause claims, or change the
@@ -25,40 +30,54 @@ contract KashLinkEscrow {
         Refunded
     }
 
-    /// @dev Packed into two slots: (sender, amount) and (expiry, status).
+    /// @dev Two slots: (sender, amountEach) and (token, expiry, slots, claimed, status).
     struct Link {
         address sender;
-        uint96 amount;
-        uint64 expiry;
+        uint96 amountEach;
+        address token;
+        uint40 expiry;
+        uint24 slots;
+        uint24 claimed;
         Status status;
     }
 
-    /// @notice Native USDC forwarded to the link address at creation so it can pay to claim.
-    /// @dev 0.01 USDC. A claim costs ~60k gas; at Arc's 20 gwei floor that is 0.0012 USDC, so this
-    ///      leaves room for a few retries if the fee market moves. Whatever is left stays in the
-    ///      link address as dust.
+    /// @notice Native USDC forwarded to the link address per slot at creation, so each claim can pay.
+    /// @dev 0.01 USDC. A claim costs ~70k gas; at Arc's 20 gwei floor that is 0.0014 USDC, so this
+    ///      leaves room for retries if the fee market moves. Whatever is left stays as dust.
     uint96 public constant STIPEND = 0.01 ether;
 
     /// @notice Upper bound on the fee rate the owner can set, in basis points.
     uint16 public constant MAX_FEE_BPS = 500;
 
+    /// @notice Upper bound on slots per link. Keeps the stipend and the refund maths trivially bounded.
+    uint24 public constant MAX_SLOTS = 1000;
+
     mapping(address linkId => Link) public links;
+    /// @notice Whether `to` has already taken a slot of `linkId`. One slot per address per drop.
+    mapping(address linkId => mapping(address to => bool)) public claimedBy;
 
     address public owner;
     address public pendingOwner;
 
     /// @notice Where fees go. Must be set whenever `feeBps` is non-zero.
     address public treasury;
-    /// @notice Fee rate in basis points of the link amount. Zero switches fees off entirely.
+    /// @notice Fee rate in basis points of the link total. Zero switches fees off entirely.
     uint16 public feeBps;
-    /// @notice Optional floor on the fee, native units; zero means a flat percentage. Only applies
-    ///         while `feeBps` is non-zero.
+    /// @notice Optional floor on the fee, in the link's token units; zero means a flat percentage.
+    ///         Only applies while `feeBps` is non-zero. Note it is one number for every token.
     uint96 public feeMin;
 
     uint256 private _entered = 1;
 
-    event LinkCreated(address indexed linkId, address indexed sender, uint256 amount, uint64 expiry);
-    event LinkClaimed(address indexed linkId, address indexed to, uint256 amount);
+    event LinkCreated(
+        address indexed linkId,
+        address indexed sender,
+        address indexed token,
+        uint256 amountEach,
+        uint24 slots,
+        uint40 expiry
+    );
+    event LinkClaimed(address indexed linkId, address indexed to, uint256 amount, uint24 remaining);
     event LinkRefunded(address indexed linkId, address indexed sender, uint256 amount);
     event FeesUpdated(uint16 feeBps, uint96 feeMin, address treasury);
     event OwnershipTransferStarted(address indexed from, address indexed to);
@@ -66,17 +85,19 @@ contract KashLinkEscrow {
 
     error ZeroAddress();
     error ZeroAmount();
+    error BadSlots();
     error LinkExists(address linkId);
     error NotPending(address linkId);
+    error AlreadyClaimed(address linkId, address to);
     error ExpiryInPast();
     error WrongValue(uint256 expected, uint256 sent);
     error NotSender();
-    error NotExpired(uint64 expiry);
+    error NotExpired(uint40 expiry);
     error FeeTooHigh();
     error TreasuryRequired();
     error NotOwner();
     error NotPendingOwner();
-    error TransferFailed(address to);
+    error TransferFailed(address token, address to);
     error Reentrancy();
 
     modifier onlyOwner() {
@@ -97,48 +118,85 @@ contract KashLinkEscrow {
         _setFees(feeBps_, feeMin_, treasury_);
     }
 
-    // ---------------------------------------------------------------- links
+    // ---------------------------------------------------------------- quotes
 
-    /// @notice The fee charged on top of `amount`.
-    function feeFor(uint256 amount) public view returns (uint256) {
+    /// @notice The fee charged on top of a link total, in the link's token units.
+    function feeFor(uint256 total) public view returns (uint256) {
         if (feeBps == 0) return 0;
-        uint256 fee = (amount * feeBps) / 10_000;
+        uint256 fee = (total * feeBps) / 10_000;
         return fee < feeMin ? feeMin : fee;
     }
 
-    /// @notice What the sender must attach to `create` for a link worth `amount`.
-    function totalFor(uint256 amount) public view returns (uint256) {
-        return amount + feeFor(amount) + STIPEND;
+    /**
+     * @notice What a link costs the sender.
+     * @return tokenTotal  What the recipients get in total, plus the fee — in the link's token. For a
+     *                     native link this is part of `value`; for an ERC-20 link it is pulled with
+     *                     `transferFrom`, so it is what the sender must approve.
+     * @return fee         The fee inside `tokenTotal`.
+     * @return value       `msg.value` that `create` requires: the stipends, plus `tokenTotal` for a
+     *                     native link.
+     */
+    function quote(address token, uint96 amountEach, uint24 slots)
+        public
+        view
+        returns (uint256 tokenTotal, uint256 fee, uint256 value)
+    {
+        uint256 total = uint256(amountEach) * slots;
+        fee = feeFor(total);
+        tokenTotal = total + fee;
+        value = uint256(STIPEND) * slots;
+        if (token == address(0)) value += tokenTotal;
     }
+
+    // ---------------------------------------------------------------- links
 
     /**
      * @notice Fund a link.
-     * @param linkId  Address of the link's throwaway key. Must be unused.
-     * @param amount  What the recipient receives, native units.
-     * @param expiry  Unix time after which the sender may take the money back.
-     * @dev `msg.value` must equal `totalFor(amount)` exactly. The fee goes to the treasury now, not
-     *      on resolution: a link costs the same whether it is claimed or returned, which is what
-     *      stops create-then-refund being free.
+     * @param linkId      Address of the link's throwaway key. Must be unused.
+     * @param token       `address(0)` for native USDC, or an ERC-20 the sender has approved.
+     * @param amountEach  What each claimant receives, in the token's units.
+     * @param slots       How many claims the link allows. 1 for ordinary cash.
+     * @param expiry      Unix time after which the sender may take back what is unclaimed.
+     * @dev `msg.value` must equal `quote(...).value` exactly. The fee goes to the treasury now, not on
+     *      resolution: a link costs the same whether it is claimed or returned, which is what stops
+     *      create-then-refund being free. For ERC-20 links the fee is paid in that token.
      */
-    function create(address linkId, uint96 amount, uint64 expiry) external payable nonReentrant {
+    function create(address linkId, address token, uint96 amountEach, uint24 slots, uint40 expiry)
+        external
+        payable
+        nonReentrant
+    {
         if (linkId == address(0)) revert ZeroAddress();
-        if (amount == 0) revert ZeroAmount();
+        if (amountEach == 0) revert ZeroAmount();
+        if (slots == 0 || slots > MAX_SLOTS) revert BadSlots();
         if (links[linkId].status != Status.None) revert LinkExists(linkId);
         if (expiry <= block.timestamp) revert ExpiryInPast();
 
-        uint256 fee = feeFor(amount);
-        uint256 expected = amount + fee + STIPEND;
-        if (msg.value != expected) revert WrongValue(expected, msg.value);
+        (uint256 tokenTotal, uint256 fee, uint256 value) = quote(token, amountEach, slots);
+        if (msg.value != value) revert WrongValue(value, msg.value);
 
-        links[linkId] = Link({sender: msg.sender, amount: amount, expiry: expiry, status: Status.Pending});
-        emit LinkCreated(linkId, msg.sender, amount, expiry);
+        links[linkId] = Link({
+            sender: msg.sender,
+            amountEach: amountEach,
+            token: token,
+            expiry: expiry,
+            slots: slots,
+            claimed: 0,
+            status: Status.Pending
+        });
+        emit LinkCreated(linkId, msg.sender, token, amountEach, slots, expiry);
 
-        _pay(linkId, STIPEND);
-        if (fee != 0) _pay(treasury, fee);
+        _pay(address(0), linkId, uint256(STIPEND) * slots);
+        if (token == address(0)) {
+            if (fee != 0) _pay(address(0), treasury, fee);
+        } else {
+            _pull(token, msg.sender, address(this), tokenTotal - fee);
+            if (fee != 0) _pull(token, msg.sender, treasury, fee);
+        }
     }
 
     /**
-     * @notice Claim the link whose key signed this transaction, paying `to`.
+     * @notice Claim one slot of the link whose key signed this transaction, paying `to`.
      * @dev Allowed at any time while the link is pending, including after expiry: money must never
      *      be stuck because a sender forgot to return it. `refund` and `claim` cannot both succeed.
      */
@@ -146,15 +204,18 @@ contract KashLinkEscrow {
         if (to == address(0)) revert ZeroAddress();
         Link storage link = links[msg.sender];
         if (link.status != Status.Pending) revert NotPending(msg.sender);
+        if (claimedBy[msg.sender][to]) revert AlreadyClaimed(msg.sender, to);
 
-        link.status = Status.Claimed;
-        uint256 amount = link.amount;
-        emit LinkClaimed(msg.sender, to, amount);
+        claimedBy[msg.sender][to] = true;
+        uint24 remaining = link.slots - ++link.claimed;
+        if (remaining == 0) link.status = Status.Claimed;
+        uint256 amount = link.amountEach;
+        emit LinkClaimed(msg.sender, to, amount, remaining);
 
-        _pay(to, amount);
+        _pay(link.token, to, amount);
     }
 
-    /// @notice Take back an unclaimed link once it has expired. Sender only.
+    /// @notice Take back whatever is unclaimed once the link has expired. Sender only.
     function refund(address linkId) external nonReentrant {
         Link storage link = links[linkId];
         if (link.status != Status.Pending) revert NotPending(linkId);
@@ -162,10 +223,10 @@ contract KashLinkEscrow {
         if (block.timestamp < link.expiry) revert NotExpired(link.expiry);
 
         link.status = Status.Refunded;
-        uint256 amount = link.amount;
+        uint256 amount = uint256(link.amountEach) * (link.slots - link.claimed);
         emit LinkRefunded(linkId, msg.sender, amount);
 
-        _pay(msg.sender, amount);
+        _pay(link.token, msg.sender, amount);
     }
 
     // ---------------------------------------------------------------- owner
@@ -210,10 +271,28 @@ contract KashLinkEscrow {
         emit FeesUpdated(feeBps_, feeMin_, treasury_);
     }
 
-    /// @dev Native send. On Arc this reverts for the zero address, blocklisted addresses, and
-    ///      contracts whose receive path fails; all of those should fail the whole call.
-    function _pay(address to, uint256 amount) private {
-        (bool ok,) = to.call{value: amount}("");
-        if (!ok) revert TransferFailed(to);
+    /// @dev Send `amount` of `token` (native when zero). A native send on Arc reverts for the zero
+    ///      address, blocklisted addresses, and contracts whose receive path fails; an ERC-20 may
+    ///      revert or return false. All of those fail the whole call.
+    function _pay(address token, address to, uint256 amount) private {
+        if (token == address(0)) {
+            (bool ok,) = to.call{value: amount}("");
+            if (!ok) revert TransferFailed(token, to);
+        } else {
+            _erc20(token, to, abi.encodeWithSelector(0xa9059cbb, to, amount)); // transfer(to, amount)
+        }
+    }
+
+    /// @dev `transferFrom` with the same return-value discipline as `_pay`.
+    function _pull(address token, address from, address to, uint256 amount) private {
+        _erc20(token, to, abi.encodeWithSelector(0x23b872dd, from, to, amount)); // transferFrom(from, to, amount)
+    }
+
+    /// @dev Tokens that return nothing (USDT-style) are accepted; a `false` or a revert is not.
+    function _erc20(address token, address to, bytes memory data) private {
+        (bool ok, bytes memory ret) = token.call(data);
+        if (!ok || (ret.length != 0 && !abi.decode(ret, (bool))) || token.code.length == 0) {
+            revert TransferFailed(token, to);
+        }
     }
 }
