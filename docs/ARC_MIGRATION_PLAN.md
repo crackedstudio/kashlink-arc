@@ -89,7 +89,7 @@ uint96  public constant STIPEND = 1e16;   // 0.01 USDC, ~8× a claim's gas at th
 function feeFor(uint256 amount) public view returns (uint256);   // max(amount*feeBps/1e4, feeMin), 0 if feeBps==0 && feeMin==0
 function create(address linkId, uint64 expiry) external payable; // msg.value == amount + feeFor(amount) + STIPEND; amount derived
 function claim(address to) external;                             // msg.sender == linkId, Pending → Claimed, pay `to`
-function refund() external;                                      // Pending, msg.sender == sender, block.timestamp >= expiry
+function refund(address linkId) external;                        // Pending, msg.sender == sender, block.timestamp >= expiry
 function setFees(uint16 bps, uint96 min, address treasury) external; // onlyOwner
 function transferOwnership(address) external;                    // two-step (Ownable2Step-style)
 
@@ -227,7 +227,7 @@ exports (`npx knip` or a quick grep). Commit.
 **Step 3.7 — Testnet end-to-end.** With `VITE_ARC_NETWORK=testnet` and the Step 2.4 address: create
 a link from a MetaMask testnet account, open it in a private window, claim to a second address,
 create another, wait/advance expiry (deploy a second testnet instance with a short `expiry` for
-this), refund. Take screenshots into `docs/screenshots/`. Fix what breaks. Commit.
+this), refund. Fix what breaks. Commit.
 
 Push.
 

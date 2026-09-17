@@ -1,202 +1,163 @@
 # KashLink
 
-Send money as a link. No address, no account, no gas.
+Send USDC as a link. No address, no account, no gas.
 
-KashLink is a [Nimiq Pay](https://nimiq.com/nimiq-pay/) mini app that turns an amount into a shareable
-link. Whoever opens it keeps the money. It carries **NIM** and **USDT on Polygon**, works inside Nimiq
-Pay and in an ordinary browser, and never asks either side to hold a gas token.
+KashLink turns an amount of USDC into a shareable link. Whoever opens it keeps the money. It runs on
+[Arc](https://arc.io), Circle's USDC-native chain, and it exists in this form *because* of Arc: on a
+chain where USDC is the gas token, a throwaway link can pay for its own claim.
 
-Inspired by MiniPay's Cash Link, with three things the built-in Nimiq cashlink does not do: stablecoins,
-links you can take back, and a view of what you have sent.
+- **Live:** _mainnet deployment pending — see [`contracts/deployments.md`](contracts/deployments.md)_
+- **Contract:** `KashLinkEscrow` — [testnet, verified](https://explorer.testnet.arc.io/address/0x1a250562953F1124F745ed347Eec8832bbf07241)
+- **Built for:** [Arc Microgrants](https://dorahacks.io/hackathon/arc-microgrants/detail)
+
+---
+
+## What it uses Arc for
+
+Every "cash link" product has the same problem: the link is a fresh address, and a fresh address
+has no gas, so the recipient can't move the money out. The usual answers are a relayer (someone
+else pays the gas — a hot wallet to run, meta-transactions to sign, an API to keep up) or asking the
+recipient to first go and buy the gas token, which defeats the point.
+
+On Arc the native token *is* USDC. So when a sender funds a link, the contract drops one cent of
+USDC on the link's address, and that cent is the gas for the claim. The recipient signs one plain
+transaction with the key in the link and the chain accepts it. No relayer, no second token, no
+"first install a wallet". The previous version of this app (for Polygon) needed a Supabase edge
+function, an EIP-712 meta-transaction scheme and a funded hot wallet to do what one `call{value}`
+does here. That is the whole reason it is on Arc.
+
+Arc's instant finality does the rest: the claim screen shows "received" on the next block, with no
+confirmation countdown.
 
 ---
 
 ## How a link works
 
-Every link is a throwaway wallet.
+1. The sender's browser generates a key pair. The private key goes in the URL fragment
+   (`…/#<key>`); fragments never reach a server. The address is the link's id.
+2. The sender's wallet calls `KashLinkEscrow.create(id, amount, expiry)` with
+   `amount + fee + 0.01 USDC`. The contract escrows `amount`, sends the fee to the treasury, and
+   sends the cent to the link address.
+3. The recipient opens the link, types or connects an address to receive at, and the app sends
+   `claim(to)` **from the link address**, gas paid by that cent. The contract pays `amount` to `to`.
+4. If nobody claims before `expiry` (the sender picks 1, 7 or 30 days), the sender presses Return and
+   `refund(id)` sends it back — from any device, since only the sender's wallet is needed.
 
-1. The app generates a fresh key pair and puts the **private key in the URL fragment** (`…/#<key>`).
-   Fragments are never transmitted to a server, so the key stays between the people holding the link.
-2. The sender funds that address from their wallet.
-3. The recipient's copy of the app signs a transfer **with the link's own key** and broadcasts it.
+**Whoever holds the link controls the money.** Share it like cash.
 
-The consequence worth understanding: **whoever holds the link controls the money.** There is no
-account, no recovery, and no permission check — which is what makes it work for someone who has never
-used crypto, and why a link should be shared like cash.
+## The contract
 
-### The gas problem, and how each chain solves it
+[`contracts/src/KashLinkEscrow.sol`](contracts/src/KashLinkEscrow.sol), ~200 lines, no
+dependencies, 33 Foundry tests including reentrancy and fee fuzzing.
 
-A brand-new address holds no gas, so moving money out of it should be impossible.
+| | |
+|---|---|
+| `create(id, amount, expiry)` payable | escrow `amount`; fee → treasury; stipend → `id` |
+| `claim(to)` | `msg.sender` must be the link id; pays `amount` to `to`; any time while pending |
+| `refund(id)` | sender only, after `expiry` |
+| `setFees(bps, min, treasury)` | owner; `bps ≤ 500` |
 
-| | Solution |
-| --- | --- |
-| **NIM** | Nimiq transactions are free. Nothing to solve. |
-| **USDT** | Polygon demands POL. The holder signs an EIP-712 **meta-transaction** off-chain and a relayer submits it, paying the gas. |
+What the owner **cannot** do: touch escrowed funds, pause, or upgrade. There is no proxy. A claim
+and a refund on the same link cannot both succeed.
 
-Polygon's USDT exposes `executeMetaTransaction`, which is what makes the second row possible. Its
-EIP-712 domain is non-standard — the chain id lives in `salt` and there is no `chainId` field — and it
-was verified against the contract's own `DOMAIN_SEPARATOR`. Changing any part of it silently
-invalidates every signature.
-
----
-
-## Features
-
-**Two tokens.** NIM for speed and zero fees; USDT for an amount that still means something next week.
-
-**Works in two places.** Inside Nimiq Pay the injected provider signs. In a browser the
-[Nimiq Hub](https://hub.nimiq.com) signs NIM, and any injected EVM wallet signs USDT. Claiming needs no
-wallet at all beyond an address to receive.
-
-**Links that come back.** Unclaimed links are listed with their on-chain status, and anything older
-than 7 days can be returned in one tap. This is *not* automatic: the key lives only on the sender's
-device, so the money returns when they next open the app. Putting keys somewhere a timer could reach
-them would mean custodying user funds.
-
-**A sender's view.** "2 of 5 claimed · 300 NIM still out there", per-link status, and a Return button.
-
-**Opens straight in the app.** Shared links are `nimpay.app/miniapps/open/…` URLs, a Universal Link and
-App Link domain for Nimiq Pay, so tapping one in WhatsApp opens the app directly on the claim screen.
-
----
+Everything is native USDC in 18-decimal wei — `msg.value`, `eth_getBalance`. The app never calls the
+6-decimal ERC-20 view at `0x3600…0000`, so the two can't be confused. Every transaction sets
+`maxFeePerGas ≥ 20 gwei`, because Arc's mempool silently drops anything lower.
 
 ## Fees
 
-USDT links carry a service fee; NIM links are free, because there is no gas to reimburse.
-
 | | |
-| --- | --- |
-| Rate | **1%**, minimum **$0.10** |
-| Charged to | the sender, **on top** — the recipient gets the round number |
-| Taken when | the link is resolved, whether claimed **or** reverted |
-| Cost to run | ~$0.008 of gas per link |
+|---|---|
+| Service fee | **1%**, minimum **$0.10**, paid by the sender on top |
+| Prepaid claim gas | **$0.01**, sent to the link address; a claim uses ~$0.0014 of it |
+| Charged | at creation, whether the link is later claimed or returned |
 
-The fee is charged on a revert as well as a claim. Otherwise a cancelled link costs the relayer gas for
-no revenue, and repeating create-then-revert would be a free way to drain it. The review screen and the
-revert button both state this before the user commits.
-
-Set `VITE_TREASURY_ADDRESS` to collect fees; leave it unset and USDT links are free.
-
-> **Honest limitation.** The fee is avoidable. A recipient holding the link's key can import it into any
-> wallet and sweep the USDT themselves. Making it unavoidable requires an escrow contract instead of a
-> plain address.
+Charging at creation is what makes create-then-refund pointless as an attack. The fee is enforced by
+the contract, not the app, so it can't be skipped by importing the key into another wallet — which
+was the "honest limitation" of the pre-Arc version.
 
 ---
 
 ## Project layout
 
 ```
+contracts/
+  src/KashLinkEscrow.sol   the escrow
+  test/                    Foundry tests
+  script/Deploy.s.sol      deployment; owner = broadcaster
+  deployments.md           addresses and proof transactions per network
 src/
   lib/
-    kashlink.ts     NIM links: encode, decode, sweep, status, share URLs
-    usdt.ts         USDT links: encoding, EIP-712 meta-transactions, fee maths
-    usdt-links.ts   USDT funding and claiming via the relayer
-    wallet.ts       one interface over Nimiq Pay's provider and the Nimiq Hub
-    nimiq.ts        Nimiq reads and broadcasts (RPC, light client fallback)
-    links.ts        sender's links: status cache, expiry, bulk return
-    storage.ts      localStorage — link keys live here and nowhere else
-    analytics.ts    usage events (never touches the URL; see the note in the file)
-  components/       one file per screen
-supabase/
-  functions/relay/  the gas relayer
-  schema.sql        analytics table and its row-level security
-  queries.sql       dashboard queries
+    arc.ts                 chain config, public client, fee floor, explorer URLs
+    wallet.ts              EIP-6963 wallet discovery, add/switch to Arc
+    links.ts               link model: keys, URLs, create / claim / refund, on-chain status
+    storage.ts             localStorage — link keys live here so links can be re-shared
+    format.ts              USDC formatting and parsing
+    analytics.ts           usage events (never reads the URL; see the note in the file)
+    escrow-abi.ts          generated from contracts/out by `npm run abi`
+  components/              one file per screen
+supabase/                  analytics table (append-only RLS) and dashboard queries
+docs/ARC_MIGRATION_PLAN.md the plan this was built from
 ```
-
-NIM links use the Nimiq Hub's cashlink encoding, so they remain compatible with the wider Nimiq
-ecosystem. USDT links use the same shape on a different curve and are served from `/u`, which lets the
-claim screen pick a chain before it reads the key.
-
----
 
 ## Development
 
-Requires Node 20.19+ or 22.12+.
+Requires Node 20.19+ and [Foundry](https://getfoundry.sh).
 
 ```bash
 npm install
-npm run dev          # http://<your-LAN-IP>:5190
+cp .env.example .env       # points at the verified testnet contract by default
+npm run dev                # http://localhost:5191, Arc Testnet
+npm test                   # vitest
+cd contracts && forge test # 33 tests
 ```
 
-Open **Nimiq Pay → Mini Apps** and enter the Network URL printed in the terminal — not `localhost`,
-which on a phone means the phone. Both devices must share a Wi-Fi network.
+Get testnet USDC from [faucet.circle.com](https://faucet.circle.com) (network: Arc Testnet). Any
+EVM wallet works as the sender; the app adds the Arc network to it on connect. Claiming needs no
+wallet at all — paste any address.
 
-**Test NIM with fake money first.** In Nimiq Pay, long-press **Settings** for 10 seconds to reveal the
-dev menu, switch to **Testnet**, then use **Get free NIM**. `npm run dev` targets testnet by default;
-production builds target mainnet.
-
-USDT has no testnet path here — the relayer and contract addresses are mainnet — so test it with an
-amount you do not mind losing.
-
-```bash
-npm run build        # type-check and bundle to dist/
-```
-
----
+`npm run build` type-checks and bundles to `dist/`. Production builds default to mainnet.
 
 ## Configuration
 
-All client variables are `VITE_`-prefixed and **baked in at build time**, so changing one needs a
-redeploy. See `.env.example`.
+All `VITE_` variables are baked in at build time. See [`.env.example`](.env.example).
 
 | Variable | Purpose |
-| --- | --- |
-| `VITE_NIMIQ_NETWORK` | `MainAlbatross` / `TestAlbatross`. Must match Nimiq Pay's network. |
+|---|---|
+| `VITE_ARC_NETWORK` | `mainnet` / `testnet`. Default: testnet in dev, mainnet in production. |
+| `VITE_ESCROW_ADDRESS` | The escrow on that network. Unset ⇒ links can't be created. |
+| `VITE_ESCROW_DEPLOY_BLOCK` | Where to start scanning for the wallet's past links. |
 | `VITE_PUBLIC_URL` | Public URL that shared links point at. |
-| `VITE_RELAY_URL` | Gas relayer endpoint. **Unset ⇒ USDT links are hidden.** |
-| `VITE_TREASURY_ADDRESS` | Fee destination. Unset ⇒ USDT links are free. |
+| `VITE_ARC_RPC_URL` | Override the public RPC. |
 | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Analytics. Unset ⇒ nothing is recorded. |
-| `VITE_DIRECT_LINKS` | `false` shares the plain app URL instead of the nimpay.app one. |
-| `VITE_NIMIQ_RPC_URL` / `VITE_POLYGON_RPC_URL` | Override the public RPCs. |
-
-Server-side only, set with `supabase secrets set` — never as a `VITE_` variable, which would publish it
-to every visitor:
-
-| Secret | Purpose |
-| --- | --- |
-| `RELAYER_PRIVATE_KEY` | Signs and pays for relayed transactions. |
-| `POLYGON_RPC_URL` | Optional dedicated RPC for the relayer. |
-
----
 
 ## Deployment
 
-**Frontend** — any static host. The repo is set up for Vercel (`vercel.json` handles the `/u` route and
-asset caching):
+**Contract** — see [`contracts/README.md`](contracts/README.md). Deployer key in a Foundry keystore,
+never in a file. Verify on Blockscout with `--verifier blockscout`.
 
-```bash
-npm run build        # dist/
-```
+**Frontend** — any static host; `vercel.json` is included. Set `VITE_ARC_NETWORK=mainnet` and
+`VITE_ESCROW_ADDRESS` to the mainnet contract.
 
-**Relayer** — a Supabase Edge Function:
-
-```bash
-supabase functions deploy relay --no-verify-jwt
-supabase secrets set RELAYER_PRIVATE_KEY=0x...
-```
-
-Then fund the relayer address with POL. Roughly **$0.008 per link**, so $5 covers about 600.
-
-**Analytics** — paste `supabase/schema.sql` into the Supabase SQL editor. It creates the table and a
-row-level security policy that lets the public key *append* events and nothing else: it cannot read the
-table, enumerate links, or erase history. Read your numbers with `supabase/queries.sql`.
-
----
+**Analytics** — paste `supabase/schema.sql` into the Supabase SQL editor. The anon key can only
+append events; it cannot read the table, enumerate links or erase history.
 
 ## Security notes
 
-- **Link keys never leave the device.** They live in the URL fragment and `localStorage`. No server ever
-  receives one.
-- **Analytics never reads `location`.** A link URL contains a spendable key, so anything logging page
-  URLs would ship keys to a third party. Every value sent is passed explicitly; see `src/lib/analytics.ts`.
-- **The relayer is a hot wallet.** Keep only a working balance in it — that balance is the maximum
-  anyone can burn. It relays exactly one call shape (a USDT transfer above a floor), checks the sender's
-  balance, and simulates every request, refusing anything that would revert.
-- **Payouts never go to contracts.** A transfer into an HTLC or vesting contract is accepted by the
-  network and then fails, stranding the funds. Claims and reverts resolve to a basic address only.
-- **Clearing site data loses unclaimed links.** The key is the money.
-
----
+- **The contract holds the money, not the app and not us.** The only paths out are `claim` (link
+  key) and `refund` (sender, after expiry). The app can disappear and both still work by calling the
+  contract directly.
+- **Link keys never leave the device.** URL fragment plus `localStorage`. The page sends
+  `Referrer-Policy: no-referrer` so a fragment can't leak through a referrer either.
+- **Analytics never reads `location`.** Every value sent is passed explicitly — see
+  `src/lib/analytics.ts`.
+- **Losing the key doesn't lose the money.** It loses the ability to re-share; the sender can still
+  refund after expiry from their wallet.
+- **Stipend drain.** Someone holding a link could spend its cent on something else and leave the link
+  unclaimable until the sender refunds it. The claim screen detects this and says so. Cost of the
+  attack: the attacker's own cent, and the sender's fee.
+- **Not audited.** Tests, yes; independent audit, no. Don't put more in a link than you'd hand over
+  in cash.
 
 ## Licence
 
