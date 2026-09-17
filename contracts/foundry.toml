@@ -24,3 +24,7 @@ arc_testnet = "${ARC_TESTNET_RPC_URL}"
 
 # Arc's explorer is Blockscout. Verify with explicit flags (see README); an [etherscan] section
 # here makes forge reject the chain id.
+
+# Lint the contract, not the test harness (mocks and helper casts).
+[lint]
+ignore = ["test/*"]

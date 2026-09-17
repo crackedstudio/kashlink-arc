@@ -2,6 +2,29 @@
 
 ## Arc Testnet (chain 5042002)
 
+### v2 — drops and EURC (current)
+
+| | |
+|---|---|
+| KashLinkEscrow | [`0xb66527AeBF350eA229829b12b8BBFdE88944d65b`](https://explorer.testnet.arc.io/address/0xb66527AeBF350eA229829b12b8BBFdE88944d65b) — source verified |
+| Deploy tx | [`0xc37c7df5…f95c`](https://explorer.testnet.arc.io/tx/0xc37c7df59254501d07f5f2dcf0402f7da6a0df9d0afaa8c0d8f9e6ebca4af95c), block 62559727 |
+| Owner / treasury | `0x70B22b00B1a579bc005dDB0c8770E11EdC20C178` (throwaway testnet key) |
+| Fees | 1 % (100 bps), no floor |
+| Deployed | 2026-09-17 |
+
+Proof transactions:
+
+| Step | Tx |
+|---|---|
+| `create` a 3-slot USDC drop, $0.10 each (value 0.333 = 0.30 + 0.003 fee + 3 × 0.01 stipend) | [`0x688c2fb7…01a6`](https://explorer.testnet.arc.io/tx/0x688c2fb73d9c603b716a531873a5ac8aca85fdda0da44923774fbac78b1d01a6) |
+| `claim` slot 1 | [`0xdec56c5e…c5a5`](https://explorer.testnet.arc.io/tx/0xdec56c5e826ea4a6caec4bd1abf4888e9898ef930c26842f1f282c323177c5a5) |
+| `claim` slot 2 | [`0xb03ac839…2bc5`](https://explorer.testnet.arc.io/tx/0xb03ac83992eb3fd9064d35c81d0bd1bb93d6af1bccb811138f0e2483f9982bc5) |
+| `claim` slot 3 → status Claimed | [`0x8c8ee406…c406`](https://explorer.testnet.arc.io/tx/0x8c8ee406f2bc94fd34a3035bd13b439895f69db5203cc4cf8fa6caf55f0ec406) |
+| EURC link create / claim | _pending testnet EURC_ |
+
+### v1 — single-slot USDC (superseded)
+
+
 | | |
 |---|---|
 | KashLinkEscrow | [`0x1a250562953F1124F745ed347Eec8832bbf07241`](https://explorer.testnet.arc.io/address/0x1a250562953F1124F745ed347Eec8832bbf07241) — source verified |
