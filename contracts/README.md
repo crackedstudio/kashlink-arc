@@ -32,20 +32,16 @@ forge verify-contract <ADDRESS> src/KashLinkEscrow.sol:KashLinkEscrow \
 
 ### Mainnet (chain 5042)
 
-Real USDC, irreversible. Run from your own terminal with a keystore account; never put the key in a
-file or a `--private-key` flag.
+Real USDC, irreversible. One script does the whole thing from your own terminal:
 
 ```bash
-cast wallet import arc-mainnet --interactive
-source .env
-forge script script/Deploy.s.sol --rpc-url arc --account arc-mainnet \
-  --broadcast --with-gas-price 20gwei
-forge verify-contract <ADDRESS> src/KashLinkEscrow.sol:KashLinkEscrow \
-  --chain 5042 --verifier blockscout --verifier-url https://explorer.arc.io/api/ \
-  --constructor-args $(cast abi-encode "constructor(address,address,uint16,uint96)" <OWNER> $TREASURY $FEE_BPS $FEE_MIN)
+./deploy-mainnet.sh
 ```
 
-Record the address and transaction in `deployments.md`, then set `VITE_ESCROW_ADDRESS` for the app.
+It creates the `arc-mainnet` keystore if needed (you paste the key into Foundry's encrypted prompt),
+deploys with the deployer as treasury and a flat 1% fee, verifies on explorer.arc.io, appends the
+result to `deployments.md`, and writes `.env.production` for the app. The key never touches a file
+or a `--private-key` flag. Fund the deployer with a little USDC on Arc first (deployment is ~0.03).
 
 ## Poking it by hand
 
