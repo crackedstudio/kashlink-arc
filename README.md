@@ -2,13 +2,22 @@
 
 Send USDC as a link. No address, no account, no gas.
 
-KashLink turns an amount of USDC into a shareable link. Whoever opens it keeps the money. It runs on
+KashLink turns an amount of USDC or EURC into a shareable link. Whoever opens it keeps the money.
+One link can be cash for one person or a **drop** the first few people to open it share. It runs on
 [Arc](https://arc.io), Circle's USDC-native chain, and it exists in this form *because* of Arc: on a
 chain where USDC is the gas token, a throwaway link can pay for its own claim.
 
 - **Live:** _mainnet deployment pending — see [`contracts/deployments.md`](contracts/deployments.md)_
-- **Contract:** `KashLinkEscrow` — [testnet, verified](https://explorer.testnet.arc.io/address/0x1a250562953F1124F745ed347Eec8832bbf07241)
+- **Contract:** `KashLinkEscrow` — [testnet, verified](https://explorer.testnet.arc.io/address/0xb66527AeBF350eA229829b12b8BBFdE88944d65b)
 - **Built for:** [Arc Microgrants](https://dorahacks.io/hackathon/arc-microgrants/detail)
+
+| | |
+|---|---|
+| **Cash links** | one link, one person, any amount of USDC or EURC |
+| **Drops** | one link, up to 100 people, first come first served, one slot per address |
+| **Notes and QR** | a message rides in the link (never on a server); a QR for in-person handoff |
+| **Returns** | anything unclaimed comes back to the sender after 1, 7 or 30 days — from any device |
+| **Live stats** | `/stats` reads every link ever made from the contract's events; no backend |
 
 ---
 
@@ -26,50 +35,57 @@ transaction with the key in the link and the chain accepts it. No relayer, no se
 function, an EIP-712 meta-transaction scheme and a funded hot wallet to do what one `call{value}`
 does here. That is the whole reason it is on Arc.
 
-Arc's instant finality does the rest: the claim screen shows "received" on the next block, with no
-confirmation countdown.
+Drops push the same idea further: a 50-person drop puts fifty cents of gas on one link address and
+fifty people claim from it, each paying ~$0.0014, with instant finality resolving the race between
+them. EURC links use Arc's second genesis stablecoin, with the claim gas still paid in USDC from the
+stipend — so a recipient of euros never needs to hold anything either.
 
 ---
 
 ## How a link works
 
 1. The sender's browser generates a key pair. The private key goes in the URL fragment
-   (`…/#<key>`); fragments never reach a server. The address is the link's id.
-2. The sender's wallet calls `KashLinkEscrow.create(id, amount, expiry)` with
-   `amount + fee + 0.01 USDC`. The contract escrows `amount`, sends the fee to the treasury, and
-   sends the cent to the link address.
-3. The recipient opens the link, types or connects an address to receive at, and the app sends
-   `claim(to)` **from the link address**, gas paid by that cent. The contract pays `amount` to `to`.
-4. If nobody claims before `expiry` (the sender picks 1, 7 or 30 days), the sender presses Return and
-   `refund(id)` sends it back — from any device, since only the sender's wallet is needed.
+   (`…/#<key>&m=<note>`); fragments never reach a server. The address is the link's id.
+2. The sender's wallet calls `KashLinkEscrow.create(id, token, amountEach, slots, expiry)`. For USDC
+   the value is `amountEach × slots + fee + 0.01 × slots`; for EURC the tokens are pulled with
+   `transferFrom` and the value is only the stipends. The contract escrows the total, sends the fee
+   to the treasury, and sends one cent per slot to the link address.
+3. The recipient opens the link, connects a wallet or pastes an address, and the app sends
+   `claim(to)` **from the link address**, gas paid by that cent. The contract pays `amountEach` to
+   `to`. Each address can take one slot of a drop.
+4. If slots are left after `expiry` (the sender picks 1, 7 or 30 days), the sender presses Return and
+   `refund(id)` sends the remainder back — from any device, since only the sender's wallet is needed.
 
 **Whoever holds the link controls the money.** Share it like cash.
 
 ## The contract
 
-[`contracts/src/KashLinkEscrow.sol`](contracts/src/KashLinkEscrow.sol), ~200 lines, no
-dependencies, 34 Foundry tests including reentrancy and fee fuzzing.
+[`contracts/src/KashLinkEscrow.sol`](contracts/src/KashLinkEscrow.sol), ~260 lines, no
+dependencies, 39 Foundry tests including reentrancy, ERC-20 failure modes and fee fuzzing.
 
 | | |
 |---|---|
-| `create(id, amount, expiry)` payable | escrow `amount`; fee → treasury; stipend → `id` |
-| `claim(to)` | `msg.sender` must be the link id; pays `amount` to `to`; any time while pending |
-| `refund(id)` | sender only, after `expiry` |
+| `quote(token, amountEach, slots)` | what the sender pays: token total, fee, native value |
+| `create(id, token, amountEach, slots, expiry)` payable | escrow the total; fee → treasury; one stipend per slot → `id` |
+| `claim(to)` | `msg.sender` must be the link id; one slot per `to`; pays `amountEach`; any time while pending |
+| `refund(id)` | sender only, after `expiry`; returns `amountEach × unclaimed slots` |
 | `setFees(bps, min, treasury)` | owner; `bps ≤ 500` |
 
 What the owner **cannot** do: touch escrowed funds, pause, or upgrade. There is no proxy. A claim
 and a refund on the same link cannot both succeed.
 
-Everything is native USDC in 18-decimal wei — `msg.value`, `eth_getBalance`. The app never calls the
-6-decimal ERC-20 view at `0x3600…0000`, so the two can't be confused. Every transaction sets
-`maxFeePerGas ≥ 20 gwei`, because Arc's mempool silently drops anything lower.
+USDC links are native 18-decimal wei — `msg.value`, `eth_getBalance`; the app never calls the
+6-decimal ERC-20 view at `0x3600…0000`, so the two can't be confused. EURC is a normal 6-decimal
+ERC-20 and the escrow checks its return values. Every transaction sets `maxFeePerGas ≥ 20 gwei`,
+because Arc's mempool silently drops anything lower. Concurrent drop claims share one sender
+address, so the client fetches the pending nonce and retries on a collision.
 
 ## Fees
 
 | | |
 |---|---|
-| Service fee | **1%** flat, paid by the sender on top — no minimum, so a $1 link costs a cent |
-| Prepaid claim gas | **$0.01**, sent to the link address; a claim uses ~$0.0014 of it |
+| Service fee | **1%** of the link total, flat, paid by the sender on top — no minimum, so a $1 link costs a cent |
+| Prepaid claim gas | **$0.01 per slot**, sent to the link address; a claim uses ~$0.0014 of it |
 | Charged | at creation, whether the link is later claimed or returned |
 
 Charging at creation is what makes create-then-refund pointless as an attack. The fee is enforced by
@@ -89,10 +105,13 @@ contracts/
 src/
   lib/
     arc.ts                 chain config, public client, fee floor, explorer URLs
+    tokens.ts              USDC (native) and EURC (ERC-20): formatting, balances
     wallet.ts              EIP-6963 wallet discovery, add/switch to Arc
-    links.ts               link model: keys, URLs, create / claim / refund, on-chain status
+    links.ts               link model: keys, URLs, notes, quotes, create / claim / refund, status
+    explorer.ts            event history from the explorer's log index (RPC caps getLogs ranges)
+    stats.ts               the /stats aggregation
     storage.ts             localStorage — link keys live here so links can be re-shared
-    format.ts              USDC formatting and parsing
+    format.ts              dates, addresses, countdowns
     analytics.ts           usage events (never reads the URL; see the note in the file)
     escrow-abi.ts          generated from contracts/out by `npm run abi`
   components/              one file per screen
@@ -109,11 +128,11 @@ npm install
 cp .env.example .env       # points at the verified testnet contract by default
 npm run dev                # http://localhost:5191, Arc Testnet
 npm test                   # vitest
-cd contracts && forge test # 34 tests
+cd contracts && forge test # 39 tests
 ```
 
-Get testnet USDC from [faucet.circle.com](https://faucet.circle.com) (network: Arc Testnet). Any
-EVM wallet works as the sender; the app adds the Arc network to it on connect. Claiming needs no
+Get testnet USDC and EURC from [faucet.circle.com](https://faucet.circle.com) (network: Arc Testnet).
+Any EVM wallet works as the sender; the app adds the Arc network to it on connect. Claiming needs no
 wallet at all — connect one, or paste any address.
 
 `npm run build` type-checks and bundles to `dist/`. Production builds default to mainnet.

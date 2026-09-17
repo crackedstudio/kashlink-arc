@@ -46,11 +46,14 @@ or a `--private-key` flag. Fund the deployer with a little USDC on Arc first (de
 ## Poking it by hand
 
 ```bash
-export RPC=https://rpc.testnet.arc.io ESCROW=<ADDRESS>
+export RPC=https://rpc.testnet.arc.io ESCROW=<ADDRESS> NATIVE=0x0000000000000000000000000000000000000000
 LINK_KEY=$(cast wallet new --json | jq -r .[0].private_key); LINK=$(cast wallet address $LINK_KEY)
-AMOUNT=1000000000000000000                                   # 1 USDC, 18 decimals
-TOTAL=$(cast call $ESCROW "totalFor(uint256)(uint256)" $AMOUNT --rpc-url $RPC)
-cast send $ESCROW "create(address,uint96,uint64)" $LINK $AMOUNT $(( $(date +%s) + 3600 )) \
-  --value $TOTAL --account arc-testnet --rpc-url $RPC --gas-price 20gwei
+EACH=1000000000000000000 SLOTS=3                              # 1 USDC each, 18 decimals, 3 people
+VALUE=$(cast call $ESCROW "quote(address,uint96,uint24)(uint256,uint256,uint256)" $NATIVE $EACH $SLOTS --rpc-url $RPC | sed -n 3p | awk '{print $1}')
+cast send $ESCROW "create(address,address,uint96,uint24,uint40)" $LINK $NATIVE $EACH $SLOTS $(( $(date +%s) + 3600 )) \
+  --value $VALUE --account arc-testnet --rpc-url $RPC --gas-price 20gwei
 cast send $ESCROW "claim(address)" <RECIPIENT> --private-key $LINK_KEY --rpc-url $RPC --gas-price 20gwei
 ```
+
+For a EURC link pass the EURC address instead of `$NATIVE`, `approve` the escrow for the token total
+(the first `quote` output) first, and send only the stipends as `--value` (the third output).
