@@ -99,4 +99,12 @@ default script sender, see the note in `script/Deploy.s.sol`) and is abandoned.
 
 ## Arc Mainnet (chain 5042)
 
-_Not yet deployed._
+| | |
+|---|---|
+| KashLinkEscrow | [`0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62`](https://explorer.arc.io/address/0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62) — same address as testnet v4 (same deployer, same nonce); bytecode matches the repo build byte for byte; source verification pending (explorer API is Cloudflare-gated) |
+| Deploy tx | [`0x229fa32c…cb29`](https://explorer.arc.io/tx/0x229fa32c19ad2291dc8aa52a5959bace6881c1c0147cc12fd5ff4254ba69cb29), block 21366046 |
+| Owner / treasury | `0x2e2729F897D4E5799ADe12B3D911b40BA0307Aa4` |
+| Fees | 1 % (100 bps), no floor |
+| Deployed | 2026-09-17, 1,743,731 gas ≈ 0.035 USDC |
+
+Proof transactions: _pending smoke test_

@@ -7,11 +7,11 @@ mainnet deploy.
 
 | | |
 |---|---|
-| Live app | `TODO https://…` (Vercel) |
+| Live app | https://kashlinkarc.vercel.app |
 | Repo | https://github.com/crackedstudio/kashlink-arc (public, MIT) |
-| Contract (Arc mainnet) | `TODO 0x…` — verified on https://explorer.arc.io |
-| Contract (Arc testnet) | [`0xe16307FE8bADad783895A5c0047bEa76F152984F`](https://explorer.testnet.arc.io/address/0xe16307FE8bADad783895A5c0047bEa76F152984F), verified |
-| Live stats | `TODO https://…/stats` |
+| Contract (Arc mainnet) | [`0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62`](https://explorer.arc.io/address/0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62), deploy tx [`0x229fa32c…cb29`](https://explorer.arc.io/tx/0x229fa32c19ad2291dc8aa52a5959bace6881c1c0147cc12fd5ff4254ba69cb29) |
+| Contract (Arc testnet) | [same address](https://explorer.testnet.arc.io/address/0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62), verified |
+| Live stats | https://kashlinkarc.vercel.app/stats |
 | Builder profile | `TODO` GitHub / X / Farcaster |
 
 ## Description (≈150 words, for the form)
@@ -44,7 +44,7 @@ stats page is a handful of `view` calls.
 
 | Step | Tx |
 |---|---|
-| Deploy + verify | `TODO` |
+| Deploy | [`0x229fa32c…cb29`](https://explorer.arc.io/tx/0x229fa32c19ad2291dc8aa52a5959bace6881c1c0147cc12fd5ff4254ba69cb29) |
 | Create a $1 link | `TODO` |
 | Claim it to a second address | `TODO` |
 | Create a 3-person drop, claim two slots | `TODO` |
