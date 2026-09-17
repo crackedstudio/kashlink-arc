@@ -1,86 +1,108 @@
-import HubApi from '@nimiq/hub-api'
-import { getAccounts, IS_MAINNET } from './nimiq'
-import { getProvider, getUserAddresses, unwrap } from './provider'
+import { createWalletClient, custom, type EIP1193Provider, type Hex, type WalletClient } from 'viem'
+import { addChainParams, CHAIN, rpc } from './arc'
 
 /**
- * One wallet interface over two very different hosts:
+ * The sender's wallet: whichever EVM wallet is installed in the browser — MetaMask, Rabby, Coinbase
+ * Wallet, and so on — discovered through EIP-6963, with `window.ethereum` as the fallback for
+ * wallets that predate it.
  *
- *  - inside Nimiq Pay, the injected provider signs (native approval dialogs)
- *  - in a normal browser, the Nimiq Hub signs (a popup on hub.nimiq.com)
- *
- * Claiming needs neither: a KashLink is swept with its own key, so the wallet is only ever asked
- * for money to fund a link, or for an address to pay out to.
+ * Claiming never comes through here. A KashLink is claimed with its own key, so a recipient needs
+ * an address to receive at and nothing more; connecting a wallet on the claim screen is only a
+ * convenience to fill that address in.
  */
 
-const APP_NAME = 'KashLink'
-
-// The Hub's default endpoint is derived from our own domain (hub.<our-domain>), which does not
-// exist, so it always has to be passed explicitly.
-const HUB_ENDPOINT = IS_MAINNET ? 'https://hub.nimiq.com' : 'https://hub.nimiq-testnet.com'
-
-let hub: HubApi | null = null
-function getHub(): HubApi {
-  return hub ??= new HubApi(HUB_ENDPOINT)
+export interface DiscoveredWallet {
+  uuid: string
+  name: string
+  icon: string
+  provider: EIP1193Provider
 }
 
-/**
- * Nimiq Pay injects both of these before any page script runs, so this is reliable immediately —
- * no waiting on the SDK's init() timeout. Either one counts: getting this wrong inside Nimiq Pay
- * would try to open a Hub popup in a WebView that has a perfectly good wallet already.
- */
-export function inNimiqPay(): boolean {
-  return !!(window.nimiqPay || window.nimiq)
+interface AnnounceEvent extends Event {
+  detail: { info: { uuid: string, name: string, icon: string, rdns: string }, provider: EIP1193Provider }
 }
 
-/**
- * Where a claim or revert should pay out. Never a contract: paying into one is accepted by the
- * network and then fails, which is how 2 NIM once got stuck in an HTLC.
- */
-export async function getPayoutAddress(): Promise<string> {
-  if (inNimiqPay()) {
-    const addresses = await getUserAddresses()
-    const accounts = await getAccounts(addresses)
-    const index = accounts.findIndex(account => account.type === 'basic')
-    if (index === -1) throw new Error('Your wallet has no regular Nimiq address to receive NIM.')
-    return addresses[index]
-  }
-  const chosen = await getHub().chooseAddress({ appName: APP_NAME, disableContracts: true })
-  return chosen.address
-}
+const found = new Map<string, DiscoveredWallet>()
 
-/**
- * Moves `value` luna from the user's wallet into the link's address. Returns the funding
- * transaction hash.
- *
- * In a browser this opens the Hub in a popup, so it must be called straight from a click handler:
- * an await in between can cost the user-activation that lets the popup open. The link is therefore
- * generated before this is called, never inside it.
- */
-export async function fundKashlink(address: string, value: number): Promise<string> {
-  if (inNimiqPay()) {
-    const provider = await getProvider()
-    return unwrap(await provider.sendBasicTransactionWithData({
-      recipient: address,
-      value,
-      data: APP_NAME,
-    }))
-  }
-  const signed = await getHub().checkout({
-    appName: APP_NAME,
-    recipient: address,
-    value,
-    extraData: APP_NAME,
+if (typeof window !== 'undefined') {
+  window.addEventListener('eip6963:announceProvider', (event) => {
+    const { info, provider } = (event as AnnounceEvent).detail
+    found.set(info.uuid, { uuid: info.uuid, name: info.name, icon: info.icon, provider })
   })
-  return (signed as { hash: string }).hash
+  window.dispatchEvent(new Event('eip6963:requestProvider'))
+}
+
+/** Wallets present in this browser. Re-dispatches the request, since some inject late. */
+export function discoverWallets(): DiscoveredWallet[] {
+  window.dispatchEvent(new Event('eip6963:requestProvider'))
+  if (!found.size) {
+    const legacy = (window as { ethereum?: EIP1193Provider }).ethereum
+    if (legacy) return [{ uuid: 'legacy', name: 'Browser wallet', icon: '', provider: legacy }]
+  }
+  return [...found.values()]
+}
+
+export interface Connected {
+  wallet: DiscoveredWallet
+  address: Hex
+  client: WalletClient
+}
+
+let current: Connected | null = null
+
+export function connected(): Connected | null {
+  return current
 }
 
 /**
- * Spendable balance in luna, or null when it cannot be known up front. In a browser the user has
- * not chosen an account yet, and the Hub shows their balance and enforces it during checkout, so
- * the amount screen simply does not show one.
+ * Asks the wallet for an account and moves it onto Arc, adding the network first if the wallet has
+ * never seen it. Both prompts are the wallet's own; nothing is signed.
  */
-export async function getSpendableBalance(): Promise<number | null> {
-  if (!inNimiqPay()) return null
-  const accounts = await getAccounts(await getUserAddresses())
-  return accounts.reduce((sum, account) => sum + account.balance, 0)
+export async function connect(wallet: DiscoveredWallet): Promise<Connected> {
+  const [address] = await wallet.provider.request({ method: 'eth_requestAccounts' }) as Hex[]
+  if (!address) throw new Error('The wallet returned no account.')
+  await switchToArc(wallet.provider)
+  const client = createWalletClient({ account: address, chain: CHAIN, transport: custom(wallet.provider) })
+  current = { wallet, address, client }
+  wallet.provider.on('accountsChanged', (accounts) => {
+    const next = (accounts as Hex[])[0]
+    current = next && current ? { ...current, address: next, client: createWalletClient({ account: next, chain: CHAIN, transport: custom(wallet.provider) }) } : null
+  })
+  return current
+}
+
+export function disconnect() {
+  current = null
+}
+
+async function switchToArc(provider: EIP1193Provider) {
+  const chainId = `0x${CHAIN.id.toString(16)}`
+  try {
+    await provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId }] })
+  }
+  catch (error) {
+    // 4902: the wallet has no such chain. Add it, which also switches.
+    const code = (error as { code?: number }).code
+    if (code !== 4902 && !/unrecognized|not added|4902/i.test(String((error as Error).message))) throw error
+    await provider.request({ method: 'wallet_addEthereumChain', params: [addChainParams()] })
+  }
+}
+
+/** Native USDC balance, 18 decimals. */
+export function getBalance(address: Hex): Promise<bigint> {
+  return rpc.getBalance({ address })
+}
+
+export function isUserRejection(error: unknown): boolean {
+  const { code, name = '', message = '' } = (error ?? {}) as { code?: number, name?: string, message?: string }
+  return code === 4001 || /denied|reject|cancel|declin/i.test(`${name} ${message}`)
+}
+
+/** The short reason a person can act on, rather than viem's multi-paragraph dump. */
+export function errorMessage(error: unknown): string {
+  if (isUserRejection(error)) return 'Request cancelled.'
+  const e = error as { shortMessage?: string, details?: string, message?: string }
+  const text = e?.shortMessage || e?.details || e?.message || String(error)
+  if (/insufficient funds/i.test(text)) return 'Not enough USDC in your wallet to cover the amount and the network fee.'
+  return text.split('\n')[0]
 }
