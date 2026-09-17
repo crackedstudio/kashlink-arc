@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| KashLinkEscrow | [`0xe16307FE8bADad783895A5c0047bEa76F152984F`](https://explorer.testnet.arc.io/address/0xe16307FE8bADad783895A5c0047bEa76F152984F) — verification pending (explorer rate limit) |
+| KashLinkEscrow | [`0xe16307FE8bADad783895A5c0047bEa76F152984F`](https://explorer.testnet.arc.io/address/0xe16307FE8bADad783895A5c0047bEa76F152984F) — source verified |
 | Deploy tx | [`0xd25f1dcb…b67c`](https://explorer.testnet.arc.io/tx/0xd25f1dcb32399c25ecc11645e8f0847d2087f0a1acd49bf9de2106c6c922b67c), block 62562869 |
 | Owner / treasury | `0x70B22b00B1a579bc005dDB0c8770E11EdC20C178` (throwaway testnet key) |
 | Fees | 1 % (100 bps), no floor |
@@ -20,10 +20,13 @@ Proof transactions:
 | `claim` slot 1 | [`0xf4bd0c52…a371`](https://explorer.testnet.arc.io/tx/0xf4bd0c5275950d45e58fbb564d338fd9dade576689d4b0ba77219d259040a371) |
 | `claim` slot 2 | [`0x5f70caff…dd1c`](https://explorer.testnet.arc.io/tx/0x5f70caffeb6a79e43ccf9b91581081ebe8357a5ba492acdc788d41d00744dd1c) |
 | `refund` of the unclaimed third slot after expiry ($0.10 back) | [`0xeb848b66…786f`](https://explorer.testnet.arc.io/tx/0xeb848b6631b86004ce355a57c4a0d91dcfa8b366c37e1b5cea46c537a9bb786f) |
-| EURC link create / claim | _pending testnet EURC_ |
+| `approve` the escrow for €2.02 of EURC | [`0x003e021e…65b2`](https://explorer.testnet.arc.io/tx/0x003e021ee6a601e91dc24470c17d728580879da8a7eee70152803899aea665b2) |
+| `create` a €2.00 EURC link (value = one USDC stipend only) | [`0xd2f15d08…a4f2`](https://explorer.testnet.arc.io/tx/0xd2f15d08f0e5a093b9bd1e0a3dc9e6cda0385b041b86dbfde21248137a7fa4f2) |
+| `claim` it — recipient gets €2.00, gas from the USDC stipend | [`0x35ed6ce1…6843`](https://explorer.testnet.arc.io/tx/0x35ed6ce10dca9dd6a057a56792c27c6cd0b5e94a3adb1982d4e5225c0ecc6843) |
 
-After these, `counters()` reads `(1 link, 1 drop, 2 claims, 1 refund)` and `totals(USDC)` reads
-`(0.30 sent, 0.20 claimed, 0.10 refunded)` — the stats page is those two calls.
+After these, `counters()` reads `(2 links, 1 drop, 3 claims, 1 refund)`, `totals(USDC)` reads
+`(0.30 sent, 0.20 claimed, 0.10 refunded)` and `totals(EURC)` `(2.00, 2.00, 0)` — the stats page
+is those calls.
 
 ### v2 — drops and EURC (superseded by v3)
 

@@ -158,7 +158,12 @@ async function claimToNewWallet() {
     toPasskey.value = true
   }
   catch (e) {
-    error.value = /NotAllowed|abort|cancel/i.test(String((e as Error).name) + String((e as Error).message)) ? 'Passkey setup was cancelled.' : errorMessage(e)
+    const text = String((e as Error).name) + ' ' + String((e as { details?: string }).details ?? (e as Error).message)
+    error.value = /NotAllowed|abort|cancel/i.test(text)
+      ? 'Passkey setup was cancelled.'
+      : /entity config|SecurityError|domain/i.test(text)
+        ? 'Passkey wallets are not set up for this site yet.'
+        : errorMessage(e)
     return
   }
   finally {
