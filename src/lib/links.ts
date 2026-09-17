@@ -85,6 +85,37 @@ export interface Quote {
   total: bigint
 }
 
+export interface FeeParams {
+  feeBps: bigint
+  feeMin: bigint
+  stipend: bigint
+}
+
+let feeParamsPromise: Promise<FeeParams> | null = null
+
+/** The contract's fee settings, read once per session. */
+export function feeParams(): Promise<FeeParams> {
+  feeParamsPromise ??= Promise.all([
+    rpc.readContract({ ...escrow, functionName: 'feeBps' }),
+    rpc.readContract({ ...escrow, functionName: 'feeMin' }),
+    rpc.readContract({ ...escrow, functionName: 'STIPEND' }),
+  ]).then(([feeBps, feeMin, stipend]) => ({ feeBps: BigInt(feeBps), feeMin, stipend })).catch((error) => {
+    feeParamsPromise = null
+    throw error
+  })
+  return feeParamsPromise
+}
+
+/** Same maths as `KashLinkEscrow.feeFor`, so a screen can quote without a round trip per keypress. */
+export function quoteWith(params: FeeParams, amount: bigint): Quote {
+  let fee = 0n
+  if (params.feeBps > 0n) {
+    fee = (amount * params.feeBps) / 10_000n
+    if (fee < params.feeMin) fee = params.feeMin
+  }
+  return { amount, fee, stipend: params.stipend, total: amount + fee + params.stipend }
+}
+
 /** What a link of `amount` costs, straight from the contract so the numbers can never disagree. */
 export async function quote(amount: bigint): Promise<Quote> {
   const [fee, stipend] = await Promise.all([

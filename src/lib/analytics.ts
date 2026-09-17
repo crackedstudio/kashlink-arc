@@ -6,13 +6,12 @@
  * Every value sent from here is passed in explicitly by the caller, and reviewed below:
  *
  *   type          which lifecycle step happened
- *   token         nim or usdt — their units cannot be added together
- *   value_units   the amount in that token's smallest unit, for volume
+ *   value_units   the amount in native USDC wei (18 decimals), for volume
  *   link_address  the link's PUBLIC address — safe to store (spending needs the key, not the address)
  *                 and it lets any number in the dashboard be re-checked on-chain
  *   device_id     a random id generated on this device; not a wallet address, not a person
  *
- * Never add the secret, the user's wallet address, or anything derived from the URL.
+ * Never add the key, the user's wallet address, or anything derived from the URL.
  */
 
 const URL_BASE = import.meta.env.VITE_SUPABASE_URL
@@ -41,15 +40,14 @@ function deviceId(): string {
   }
 }
 
-export type EventType = 'created' | 'claimed' | 'reverted'
-export type EventToken = 'nim' | 'usdt'
+export type EventType = 'link_created' | 'link_claimed' | 'link_refunded'
 
 /**
  * Records one event. Fire-and-forget: never awaited, never throws, and a failure here must never
  * affect a payment, so every error is swallowed — including the 409 a duplicate send gets from the
  * unique index, which is exactly what keeps retries from double-counting.
  */
-export function track(type: EventType, valueUnits: number, linkAddress: string, token: EventToken = 'nim'): void {
+export function track(type: EventType, valueWei: bigint, linkAddress: string): void {
   if (!ENABLED) return
   try {
     fetch(`${URL_BASE}/rest/v1/events`, {
@@ -65,12 +63,11 @@ export function track(type: EventType, valueUnits: number, linkAddress: string, 
       },
       body: JSON.stringify({
         type,
-        token,
-        value_units: Math.round(valueUnits),
+        value_units: valueWei.toString(),
         link_address: linkAddress,
         device_id: deviceId(),
       }),
-      // Survive the page being navigated away (e.g. the hand-off into Nimiq Pay).
+      // Survive the page being navigated away.
       keepalive: true,
     }).catch(() => {})
   }

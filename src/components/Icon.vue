@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineProps<{
-  name: 'back' | 'info' | 'alert' | 'copy' | 'check' | 'backspace' | 'chevron' | 'help' | 'dollar' | 'whatsapp' | 'link' | 'share' | 'hexagon'
+  name: 'back' | 'info' | 'alert' | 'copy' | 'check' | 'backspace' | 'chevron' | 'help' | 'dollar' | 'whatsapp' | 'link' | 'share' | 'wallet' | 'clock' | 'external'
   size?: number
 }>()
 </script>
@@ -11,13 +11,6 @@ defineProps<{
     fill="currentColor" aria-hidden="true"
   >
     <path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.16-.17.2-.35.23-.64.08-.3-.15-1.26-.46-2.39-1.48-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.61-.91-2.2-.24-.59-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.21 3.07c.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.7.63.71.22 1.36.19 1.87.12.57-.09 1.76-.72 2-1.42.25-.69.25-1.29.18-1.41-.08-.13-.28-.2-.57-.35m-5.42 7.4h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.44-9.88 9.89-9.88 2.64 0 5.12 1.03 6.99 2.9a9.83 9.83 0 0 1 2.89 6.99c0 5.45-4.44 9.88-9.88 9.88m8.41-18.3A11.82 11.82 0 0 0 12.05 0C5.5 0 .16 5.34.16 11.89c0 2.1.55 4.14 1.59 5.95L.06 24l6.3-1.65a11.88 11.88 0 0 0 5.69 1.45c6.55 0 11.89-5.34 11.89-11.89 0-3.18-1.24-6.16-3.48-8.41Z" />
-  </svg>
-  <!-- Nimiq hexagon logo mark -->
-  <svg
-    v-else-if="name === 'hexagon'" :width="size ?? 24" :height="size ?? 24" viewBox="0 0 24 24"
-    fill="currentColor" aria-hidden="true"
-  >
-    <path d="M21.7 10.8 17.1 2.9c-.4-.7-1.2-1.2-2-1.2H6.9c-.8 0-1.6.5-2 1.2L.3 10.8c-.4.7-.4 1.7 0 2.4l4.6 7.9c.4.7 1.2 1.2 2 1.2h8.2c.8 0 1.6-.5 2-1.2l4.6-7.9c.4-.7.4-1.7 0-2.4z" />
   </svg>
   <svg
     v-else :width="size ?? 24" :height="size ?? 24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -47,6 +40,15 @@ defineProps<{
     </template>
     <template v-else-if="name === 'share'">
       <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v13" />
+    </template>
+    <template v-else-if="name === 'wallet'">
+      <path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3" /><path d="M3 7v11a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5a2 2 0 0 1-2-2z" /><circle cx="16.5" cy="14.5" r="1" />
+    </template>
+    <template v-else-if="name === 'clock'">
+      <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+    </template>
+    <template v-else-if="name === 'external'">
+      <path d="M14 4h6v6M20 4l-9 9" /><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" />
     </template>
     <path
       v-else-if="name === 'dollar'"
