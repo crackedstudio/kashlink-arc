@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineProps<{
-  name: 'back' | 'info' | 'alert' | 'copy' | 'check' | 'backspace' | 'chevron' | 'help' | 'dollar' | 'whatsapp' | 'link' | 'share' | 'wallet' | 'clock' | 'external' | 'drop' | 'qr' | 'chart' | 'fingerprint' | 'send' | 'receive' | 'switch' | 'logout' | 'key'
+  name: 'back' | 'info' | 'alert' | 'copy' | 'check' | 'backspace' | 'chevron' | 'help' | 'dollar' | 'whatsapp' | 'link' | 'share' | 'wallet' | 'clock' | 'external' | 'drop' | 'qr' | 'chart' | 'fingerprint' | 'send' | 'receive' | 'switch' | 'logout' | 'key' | 'scan'
   size?: number
 }>()
 </script>
@@ -70,6 +70,9 @@ defineProps<{
     </template>
     <template v-else-if="name === 'key'">
       <circle cx="8" cy="15" r="4" /><path d="M10.8 12.2L20 3M15 8l3 3M18 5l3 3" />
+    </template>
+    <template v-else-if="name === 'scan'">
+      <path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" /><path d="M7 12h10" />
     </template>
     <template v-else-if="name === 'external'">
       <path d="M14 4h6v6M20 4l-9 9" /><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" />

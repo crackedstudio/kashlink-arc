@@ -6,10 +6,12 @@ import { copyText } from '../lib/clipboard'
 import { formatUsdc } from '../lib/format'
 import type { PasskeyWallet } from '../lib/passkey'
 import { cachedAddress, cachedBalances, rememberBalances } from '../lib/passkey-cache'
+import { addressFromQr } from '../lib/qr'
 import { formatAmount, getTokenBalance, isNative, parseAmount, type Token, TOKENS, USDC } from '../lib/tokens'
 import { errorMessage } from '../lib/wallet'
 import AccountCard from './AccountCard.vue'
 import Icon from './Icon.vue'
+import QrScanner from './QrScanner.vue'
 
 /**
  * The passkey wallet a person made on the claim screen or the home screen: what it holds, a way to
@@ -34,6 +36,9 @@ const sending = ref(false)
 const sentTx = ref<string | null>(null)
 const qrSvg = ref('')
 const copied = ref(false)
+const scanning = ref(false)
+/** Set when a scan produced no address, so the person knows the scan itself worked. */
+const scanError = ref<string | null>(null)
 /** Native USDC kept back for the user operation's gas; the first one also deploys the account. */
 const reserve = ref(0n)
 
@@ -124,6 +129,18 @@ watch([view, address], async ([v, a]) => {
 function useMax() {
   if (!max.value) return
   amount.value = Number(formatUnits(max.value, token.value.decimals)).toFixed(2).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '')
+}
+
+/** A scanned code becomes the recipient. Wallets show their address bare or as an `ethereum:` URI; both are read. */
+function scanned(text: string) {
+  scanning.value = false
+  const found = addressFromQr(text)
+  if (!found) {
+    scanError.value = 'That code has no wallet address in it. Scan the code a wallet shows for receiving.'
+    return
+  }
+  scanError.value = null
+  to.value = found
 }
 
 function selectToken(t: Token) {
@@ -227,12 +244,20 @@ async function forget() {
               {{ t.symbol }}
             </button>
           </div>
-          <input
-            v-model="to" class="field mono" :class="{ bad: addressBad }" type="text" placeholder="0x… address on Arc"
-            autocomplete="off" autocapitalize="off" spellcheck="false" :disabled="sending"
-          >
+          <div class="addr-row">
+            <input
+              v-model="to" class="field mono" :class="{ bad: addressBad }" type="text" placeholder="0x… address on Arc"
+              autocomplete="off" autocapitalize="off" spellcheck="false" :disabled="sending" @input="scanError = null"
+            >
+            <button class="scan" type="button" aria-label="Scan a QR code" title="Scan the recipient's QR code" :disabled="sending" @click="scanning = true; scanError = null">
+              <Icon name="scan" :size="18" />
+            </button>
+          </div>
           <p v-if="addressBad" class="hint error left">
             That isn't a valid address. It should start with 0x and be 42 characters long.
+          </p>
+          <p v-else-if="scanError" class="hint error left">
+            {{ scanError }}
           </p>
           <div class="amount-row">
             <input
@@ -278,6 +303,8 @@ async function forget() {
         </template>
 
       </template>
+
+      <QrScanner v-if="scanning" title="Scan the recipient's address" @scanned="scanned" @close="scanning = false" />
 
       <p v-if="!opening" class="foot muted">
         <button class="link-btn inline" @click="forget">
@@ -440,8 +467,36 @@ h2 {
   box-shadow: 0 0 0 2px rgba(217, 68, 50, 0.35);
 }
 
+.addr-row,
 .amount-row {
   position: relative;
+}
+
+.addr-row .field {
+  padding-right: 52px;
+}
+
+.scan {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.scan:active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.scan:disabled {
+  opacity: 0.4;
 }
 
 .amount-row .field {
