@@ -1,31 +1,31 @@
-export type Token = 'nim' | 'usdt'
+import type { Hex } from 'viem'
 
 export interface StoredLink {
-  secret: string
-  address: string
-  /** Luna for NIM, smallest units (6 decimals) for USDT. */
-  value: number
-  /** Absent on links made before USDT existed, which were all NIM. */
-  token?: Token
+  /** The link's private key — the only copy besides the shared URL. */
+  key: Hex
+  /** Its address, which is the link's id in the escrow contract. */
+  id: Hex
+  /** Native USDC wei as a decimal string; JSON has no bigint. */
+  amount: string
+  /** Unix seconds after which the sender can take it back. */
+  expiry: number
   createdAt: number
-  fundingTx?: string
+  fundingTx?: Hex
   /**
-   * Terminal state, cached once the funds have left the link. The public RPC has no batch call, so
-   * every link costs a request; once a link is settled it can never change again and is never queried.
+   * Terminal state, cached once it is known. A claimed or refunded link can never change again, so
+   * it is never looked up on chain a second time.
    */
-  settled?: 'claimed' | 'reverted'
-  settledAt?: number
+  settled?: 'claimed' | 'refunded'
 }
 
-// The link's private key only lives here (and in the shared link). Losing it before the link is
-// claimed means losing the funds, so a failed write must abort the deposit — hence no try/catch.
-const KEY = 'kashlink-links'
-/** Where links were stored before the rename; still read so older links stay revertable. */
-const LEGACY_KEY = 'nimiq-cashlinks'
+// The key here is what lets the sender re-share a link; the escrow contract, not this key, holds the
+// money, so losing it means losing the ability to share — not the funds, which can still be refunded
+// from the sender's wallet after expiry. Still, a failed write should abort the deposit — hence no try/catch.
+const KEY = 'kashlink-arc-links'
 
 export function loadLinks(): StoredLink[] {
   try {
-    const list = JSON.parse(localStorage.getItem(KEY) ?? localStorage.getItem(LEGACY_KEY) ?? '[]')
+    const list = JSON.parse(localStorage.getItem(KEY) ?? '[]')
     return Array.isArray(list) ? list : []
   }
   catch {
@@ -40,31 +40,9 @@ function write(list: StoredLink[]) {
 }
 
 export function saveLink(link: StoredLink) {
-  write([link, ...loadLinks().filter(l => l.address !== link.address)])
+  write([link, ...loadLinks().filter(l => l.id !== link.id)])
 }
 
-export function removeLink(address: string) {
-  write(loadLinks().filter(l => l.address !== address))
-}
-
-// Last known wallet balance, shown instantly on the next visit while a fresh one loads.
-const BALANCE_KEY = 'kashlink-balance'
-
-export function loadCachedBalance(): number | null {
-  try {
-    const value = Number(localStorage.getItem(BALANCE_KEY))
-    return Number.isFinite(value) && localStorage.getItem(BALANCE_KEY) !== null ? value : null
-  }
-  catch {
-    return null
-  }
-}
-
-export function saveCachedBalance(luna: number) {
-  try {
-    localStorage.setItem(BALANCE_KEY, String(luna))
-  }
-  catch {
-    // only a speed-up; ignore
-  }
+export function removeLink(id: Hex) {
+  write(loadLinks().filter(l => l.id !== id))
 }
