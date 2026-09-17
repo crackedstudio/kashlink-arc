@@ -294,3 +294,54 @@ basis and decisions are per batch.
    ```
    It prompts for the private key and a password and stores an encrypted keystore in
    `~/.foundry/keystores/`. Deploy commands then use `--account arc-mainnet`.
+
+---
+
+## 6. Phase E — Features before mainnet (added 2026-09-17)
+
+Decided after Phase B: ship these before the mainnet deploy so one verified contract does everything.
+Phase C and D move after this phase. Same rules: one step, one commit, verified on testnet.
+
+### Contract v2 (`KashLinkEscrow`, redeployed; v1 stays claimable and the app keeps its address)
+
+- **Drop links.** A link has `slots` (1 = ordinary link) and `amountEach`. Any address can claim
+  once (`claimedBy[linkId][to]`); status becomes `Claimed` when the last slot goes; `refund` returns
+  `(slots − claimed) × amountEach`. Stipend is `STIPEND × slots` so every claim has gas. Claims from
+  one link address by several people race on the nonce: the client fetches the pending nonce and
+  retries on a nonce error (finality is instant, so the window is sub-second).
+- **EURC.** `token` on the link: `address(0)` = native USDC, otherwise an ERC-20 (EURC, 6 decimals,
+  `0xbEf5…21c1` mainnet / `0x89B5…D72a` testnet). ERC-20 links: sender `approve`s, `create` pulls
+  `total + fee` with `transferFrom` (fee to treasury in the same token) and `msg.value` is only the
+  stipend, still native USDC. Claims and refunds `transfer` the token. Return values are checked.
+- Fee is `feeFor(amountEach × slots)`. Everything else (owner powers, CEI, reentrancy, events with
+  the new fields) as v1.
+
+**Step 6.1** contract + NatSpec, `forge build` clean. **Step 6.2** tests: everything from 2.2 plus
+drop claim/exhaust/refund-remaining/double-claim-by-same-address, ERC-20 create/claim/refund with a
+mock token (and a token that returns false), fee on the total, stipend × slots. **Step 6.3** deploy
++ verify on testnet, cast proof for a 3-slot drop and a EURC link, `deployments.md`. The testnet
+deployer needs EURC from faucet.circle.com (user).
+
+### Client
+
+**Step 6.4** link model: `token`, `amountEach`, `slots` in URL-independent state; `Quote` per token
+and decimals; `claimLink` nonce retry; EURC approve step; `escrow-abi.ts` regenerated; tests.
+**Step 6.5** amount screen: USDC/EURC toggle, "split among N people" stepper (1–100), quote shows
+per-person and total. Review + ready sheet show the drop. **Step 6.6** message on the link:
+`#<key>&m=<text>` (≤140 chars, urlencoded, never sent anywhere), typed on the review screen, shown on
+the claim screen; QR code on the ready sheet (`qrcode` package, SVG). **Step 6.7** claim screen for
+drops: "x of N left", already-claimed-by-this-address state, nonce retry, per-token formatting.
+**Step 6.8** links sheet + intro for drops (claimed count per link, refund of the remainder).
+**Step 6.9** `/stats` page: live totals from `LinkCreated/Claimed/Refunded` events since the deploy
+block — links, people paid, USDC and EURC moved, claim rate, median link; linked from the intro
+footer; `vercel.json` rewrite. **Step 6.10** passkey wallets for recipients via Circle Modular
+Wallets (`@circle-fin/modular-wallets-core`) — "No wallet? Create one with Face ID" on the claim
+screen; needs a Client Key from the Circle developer console (user). If the key is not available
+in time, this ships as the roadmap item in the submission instead.
+**Step 6.11** testnet end-to-end of everything through the UI, then Phase C (mainnet) and D.
+
+### UI principle
+
+The core flow stays exactly as it is: open app → Create KashLink → amount → review → share. Drops
+and EURC are options *inside* the amount screen, off by default. The message is an optional field on
+review. Stats is a footer link. Nothing new is added before the first tap.
