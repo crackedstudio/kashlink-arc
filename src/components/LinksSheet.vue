@@ -151,7 +151,7 @@ async function refund(targets: Row[], key: string) {
               <span class="muted">
                 <template v-if="row.createdAt">{{ formatDate(row.createdAt) }}</template>
                 <template v-else>From another device · can't re-share</template>
-                <template v-if="statusOf(row) === 'pending' && chainState[row.id]"> · returnable {{ formatCountdown(chainState[row.id].expiry) }}</template>
+                <template v-if="statusOf(row) === 'pending' && chainState[row.id]"> · {{ isExpired(chainState[row.id]) ? 'returnable now' : `returnable ${formatCountdown(chainState[row.id].expiry)}` }}</template>
               </span>
             </span>
             <span class="status" :class="statusOf(row)">

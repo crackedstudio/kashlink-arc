@@ -25,7 +25,8 @@ const DECIMALS = 2
 const wei = computed(() => {
   const n = Number(input.value)
   if (!n) return 0n
-  return parseUsdc(input.value)
+  // "1." is a valid state of the keypad but not a number.
+  return parseUsdc(input.value.replace(/\.$/, ''))
 })
 
 /** A link costs the amount plus fee plus the claim stipend, so affordability has to include them. */
