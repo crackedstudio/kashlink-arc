@@ -37,8 +37,17 @@ const error = ref<string | null>(null)
 const connecting = ref(false)
 /** Shown when the recipient would rather paste an address than connect a wallet. */
 const manual = ref(false)
-/** Set when the payout went to a passkey wallet made right here. */
+/** Set when the payout went to the passkey wallet. */
 const toPasskey = ref(false)
+/** A passkey wallet already lives on this device; claim into it rather than making a second one. */
+const hasPasskey = (() => {
+  try {
+    return !!localStorage.getItem('kashlink-arc-passkey')
+  }
+  catch {
+    return false
+  }
+})()
 const creating = ref(false)
 let pollTimer: number | undefined
 
@@ -144,16 +153,17 @@ async function claimWithWallet() {
 }
 
 /**
- * For someone with no wallet at all: register a passkey, get the smart account it owns, claim to
- * it. The account is only an address until its first outgoing transaction, which the claimed USDC
- * can pay for. The SDK is loaded on demand — it is a third of the bundle and most people never need it.
+ * Claims to the passkey wallet: the one already on this device, or, for someone with no wallet at
+ * all, a new one — register a passkey, get the smart account it owns, claim to it. The account is
+ * only an address until its first outgoing transaction, which the claimed USDC can pay for. The SDK
+ * is loaded on demand — it is a third of the bundle and most people never need it.
  */
-async function claimToNewWallet() {
+async function claimToPasskeyWallet() {
   creating.value = true
   error.value = null
   try {
-    const { createPasskeyWallet } = await import('../lib/passkey')
-    const wallet = await createPasskeyWallet()
+    const { createPasskeyWallet, openPasskeyWallet } = await import('../lib/passkey')
+    const wallet = hasPasskey ? await openPasskeyWallet() : await createPasskeyWallet()
     to.value = wallet.address
     toPasskey.value = true
   }
@@ -231,7 +241,7 @@ async function claim() {
         take it back, and send a new one.
       </p>
       <p v-else-if="state === 'success' && toPasskey" class="status muted">
-        {{ amount }} in {{ token?.symbol }} is in your new KashLink wallet, <strong>{{ shortAddress(to.trim()) }}</strong>.
+        {{ amount }} in {{ token?.symbol }} is in your {{ hasPasskey ? '' : 'new ' }}KashLink wallet, <strong>{{ shortAddress(to.trim()) }}</strong>.
         Your passkey controls it; open it any time from the home screen.
       </p>
       <p v-else-if="state === 'success'" class="status muted">
@@ -288,12 +298,12 @@ async function claim() {
           <Icon name="wallet" :size="20" /> Connect wallet & claim {{ amount }}
         </template>
       </button>
-      <button v-if="PASSKEYS && !manual" class="btn btn-outline" :disabled="creating || state === 'claiming'" @click="claimToNewWallet">
+      <button v-if="PASSKEYS && !manual" class="btn btn-outline" :disabled="creating || state === 'claiming'" @click="claimToPasskeyWallet">
         <template v-if="creating">
-          <span class="spinner" /> Setting up your passkey…
+          <span class="spinner" /> {{ hasPasskey ? 'Opening your wallet…' : 'Setting up your passkey…' }}
         </template>
         <template v-else>
-          No wallet? Create one with a passkey
+          {{ hasPasskey ? `Claim to your KashLink wallet` : 'No wallet? Create one with a passkey' }}
         </template>
       </button>
       <button class="link-btn switch" :disabled="state === 'claiming' || creating" @click="manual = !manual; error = null">

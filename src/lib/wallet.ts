@@ -1,10 +1,10 @@
-import { createWalletClient, custom, type EIP1193Provider, type Hex, type WalletClient } from 'viem'
-import { addChainParams, CHAIN } from './arc'
+import { createWalletClient, custom, type EIP1193Provider, type Hex } from 'viem'
+import { addChainParams, CHAIN, fees, rpc } from './arc'
 
 /**
  * The sender's wallet: whichever EVM wallet is installed in the browser — MetaMask, Rabby, Coinbase
  * Wallet, and so on — discovered through EIP-6963, with `window.ethereum` as the fallback for
- * wallets that predate it.
+ * wallets that predate it. A passkey wallet (passkey.ts) can stand in for one; both are `Connected`.
  *
  * Claiming never comes through here. A KashLink is claimed with its own key, so a recipient needs
  * an address to receive at and nothing more; connecting a wallet on the claim screen is only a
@@ -42,10 +42,25 @@ export function discoverWallets(): DiscoveredWallet[] {
   return [...found.values()]
 }
 
+/** One contract call, and what to tell the user if it lands but reverts. */
+export interface Call {
+  to: Hex
+  data: Hex
+  value?: bigint
+  failure: string
+}
+
 export interface Connected {
-  wallet: DiscoveredWallet
+  name: string
   address: Hex
-  client: WalletClient
+  /** True for the passkey wallet, which has no extension to disconnect or switch. */
+  passkey: boolean
+  /**
+   * Sends `calls` in order and resolves with the last transaction's hash once every call is final.
+   * A browser wallet prompts once per call (`onPrompt` fires before each); a passkey wallet batches
+   * them into a single operation and a single prompt.
+   */
+  send: (calls: Call[], onPrompt?: (index: number) => void) => Promise<Hex>
 }
 
 let current: Connected | null = null
@@ -62,13 +77,31 @@ export async function connect(wallet: DiscoveredWallet): Promise<Connected> {
   const [address] = await wallet.provider.request({ method: 'eth_requestAccounts' }) as Hex[]
   if (!address) throw new Error('The wallet returned no account.')
   await switchToArc(wallet.provider)
-  const client = createWalletClient({ account: address, chain: CHAIN, transport: custom(wallet.provider) })
-  current = { wallet, address, client }
+  current = browserWallet(wallet, address)
   wallet.provider.on('accountsChanged', (accounts) => {
     const next = (accounts as Hex[])[0]
-    current = next && current ? { ...current, address: next, client: createWalletClient({ account: next, chain: CHAIN, transport: custom(wallet.provider) }) } : null
+    current = next && current ? browserWallet(wallet, next) : null
   })
   return current
+}
+
+function browserWallet(wallet: DiscoveredWallet, address: Hex): Connected {
+  const client = createWalletClient({ account: address, chain: CHAIN, transport: custom(wallet.provider) })
+  return {
+    name: wallet.name,
+    address,
+    passkey: false,
+    async send(calls, onPrompt) {
+      let hash: Hex = '0x'
+      for (const [i, call] of calls.entries()) {
+        onPrompt?.(i)
+        hash = await client.sendTransaction({ account: address, chain: CHAIN, to: call.to, data: call.data, value: call.value, ...(await fees()) })
+        const receipt = await rpc.waitForTransactionReceipt({ hash })
+        if (receipt.status !== 'success') throw new Error(call.failure)
+      }
+      return hash
+    },
+  }
 }
 
 async function switchToArc(provider: EIP1193Provider) {

@@ -1,10 +1,11 @@
-import { createWalletClient, type Hex, http, type WalletClient } from 'viem'
+import { createWalletClient, encodeFunctionData, type Hex, http } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import { reactive } from 'vue'
 import { CHAIN, ESCROW_ADDRESS, fees, rpc } from './arc'
 import { ESCROW_ABI } from './escrow-abi'
 import { loadLinks, saveLink, type StoredLink } from './storage'
 import { ERC20_ABI, isNative, NATIVE, type Token, tokenByAddress } from './tokens'
+import type { Call, Connected } from './wallet'
 
 /**
  * A KashLink on Arc.
@@ -175,46 +176,35 @@ export function linkGasBalance(id: Hex): Promise<bigint> {
 // ------------------------------------------------------------------ writes
 
 /**
- * Funds a link from the sender's wallet. A USDC link is one transaction. A EURC link is two when
- * the escrow's allowance is short: `approve`, then `create`. Resolves once the deposit is final.
+ * Funds a link from the sender's wallet. A USDC link is one call. A EURC link is two when the
+ * escrow's allowance is short: `approve`, then `create` — two prompts in a browser wallet, one in a
+ * passkey wallet. Resolves once the deposit is final.
  */
-export async function createLink(client: WalletClient, link: NewLink, quote: Quote, expirySeconds: number, onApprove?: () => void): Promise<Hex> {
-  const account = client.account!
+export async function createLink(wallet: Connected, link: NewLink, quote: Quote, expirySeconds: number, onApprove?: () => void): Promise<Hex> {
   const { token } = quote
   // Ask the contract for the exact value at send time, so the numbers can never disagree.
   const [tokenTotal,, value] = await rpc.readContract({ ...escrow, functionName: 'quote', args: [token.address, quote.amountEach, quote.slots] })
 
+  const calls: Call[] = []
   if (!isNative(token)) {
-    const allowance = await rpc.readContract({ address: token.address, abi: ERC20_ABI, functionName: 'allowance', args: [account.address, ESCROW_ADDRESS] })
+    const allowance = await rpc.readContract({ address: token.address, abi: ERC20_ABI, functionName: 'allowance', args: [wallet.address, ESCROW_ADDRESS] })
     if (allowance < tokenTotal) {
-      onApprove?.()
-      const approval = await client.writeContract({
-        address: token.address,
-        abi: ERC20_ABI,
-        account,
-        chain: CHAIN,
-        functionName: 'approve',
-        args: [ESCROW_ADDRESS, tokenTotal],
-        ...(await fees()),
+      calls.push({
+        to: token.address,
+        data: encodeFunctionData({ abi: ERC20_ABI, functionName: 'approve', args: [ESCROW_ADDRESS, tokenTotal] }),
+        failure: `The ${token.symbol} approval failed.`,
       })
-      const receipt = await rpc.waitForTransactionReceipt({ hash: approval })
-      if (receipt.status !== 'success') throw new Error(`The ${token.symbol} approval failed.`)
     }
   }
 
   const expiry = Math.floor(Date.now() / 1000) + expirySeconds // uint40 → a plain number in viem
-  const hash = await client.writeContract({
-    ...escrow,
-    account,
-    chain: CHAIN,
-    functionName: 'create',
-    args: [link.id, token.address, quote.amountEach, quote.slots, expiry],
+  calls.push({
+    to: ESCROW_ADDRESS,
+    data: encodeFunctionData({ abi: ESCROW_ABI, functionName: 'create', args: [link.id, token.address, quote.amountEach, quote.slots, expiry] }),
     value,
-    ...(await fees()),
+    failure: 'The deposit transaction failed.',
   })
-  const receipt = await rpc.waitForTransactionReceipt({ hash })
-  if (receipt.status !== 'success') throw new Error('The deposit transaction failed.')
-  return hash
+  return wallet.send(calls, i => i === 0 && calls.length > 1 && onApprove?.())
 }
 
 /**
@@ -246,18 +236,12 @@ export async function claimLink(key: Hex, to: Hex): Promise<Hex> {
 }
 
 /** Takes whatever is unclaimed in an expired link back to the sender's wallet. */
-export async function refundLink(client: WalletClient, id: Hex): Promise<Hex> {
-  const hash = await client.writeContract({
-    ...escrow,
-    account: client.account!,
-    chain: CHAIN,
-    functionName: 'refund',
-    args: [id],
-    ...(await fees()),
-  })
-  const receipt = await rpc.waitForTransactionReceipt({ hash })
-  if (receipt.status !== 'success') throw new Error('The refund transaction failed.')
-  return hash
+export function refundLink(wallet: Connected, id: Hex): Promise<Hex> {
+  return wallet.send([{
+    to: ESCROW_ADDRESS,
+    data: encodeFunctionData({ abi: ESCROW_ABI, functionName: 'refund', args: [id] }),
+    failure: 'The refund transaction failed.',
+  }])
 }
 
 // ------------------------------------------------------------------ the sender's links

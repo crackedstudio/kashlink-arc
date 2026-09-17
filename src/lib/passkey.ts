@@ -8,7 +8,8 @@ import {
 import { createPublicClient, encodeFunctionData, type Hex } from 'viem'
 import { createBundlerClient, type P256Credential, type SmartAccount, toWebAuthnAccount } from 'viem/account-abstraction'
 import { CHAIN, IS_MAINNET } from './arc'
-import { isNative, type Token } from './tokens'
+import { ERC20_ABI, isNative, type Token } from './tokens'
+import type { Call, Connected } from './wallet'
 
 /**
  * A wallet for people who have none: a Circle Modular Wallet owned by a passkey.
@@ -79,8 +80,14 @@ export function forgetPasskey() {
   }
 }
 
-/** Registers a new passkey and returns the wallet it owns. Shows the platform's passkey prompt. */
-export async function createPasskeyWallet(username = 'KashLink wallet'): Promise<PasskeyWallet> {
+/**
+ * Registers a new passkey and returns the wallet it owns. Shows the platform's passkey prompt.
+ * Circle only accepts 5–50 characters of `[A-Za-z0-9_@.:+-]` (no spaces); the suffix tells several
+ * KashLink passkeys apart in the device's passkey list.
+ */
+export async function createPasskeyWallet(
+  username = `kashlink-${new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-')}`,
+): Promise<PasskeyWallet> {
   const { passkey } = transports()
   const credential = await toWebAuthnCredential({ transport: passkey, mode: WebAuthnMode.Register, username })
   remember(credential)
@@ -98,18 +105,33 @@ export async function openPasskeyWallet(): Promise<PasskeyWallet> {
 }
 
 /**
- * Sends `amount` of `token` out of the passkey wallet. The account pays its own gas in USDC — the
- * first send also deploys it — so a wallet that only ever received EURC needs a little USDC first.
+ * The passkey wallet as a sender, so it can fund and refund links like a browser wallet. All calls
+ * go into one user operation, so a EURC approval and deposit are a single passkey prompt. The
+ * account pays its own gas in USDC, and its first operation also deploys it.
  */
-export async function sendFromPasskey(wallet: PasskeyWallet, token: Token, to: Hex, amount: bigint): Promise<Hex> {
-  const { modular } = transports()
-  const bundler = createBundlerClient({ chain: CHAIN, transport: modular })
-  const call = isNative(token)
-    ? { to, value: amount }
-    : { to: token.address, data: encodeFunctionData({ abi: [{ name: 'transfer', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] }] as const, functionName: 'transfer', args: [to, amount] }) }
-  const hash = await bundler.sendUserOperation({ account: wallet.account, calls: [call] })
-  const { receipt } = await bundler.waitForUserOperationReceipt({ hash })
-  if (receipt.status !== 'success') throw new Error('The transfer failed.')
-  return receipt.transactionHash
+export function asSender(wallet: PasskeyWallet): Connected {
+  return {
+    name: 'KashLink wallet',
+    address: wallet.address,
+    passkey: true,
+    async send(calls: Call[]) {
+      const { modular } = transports()
+      const bundler = createBundlerClient({ chain: CHAIN, transport: modular })
+      const hash = await bundler.sendUserOperation({
+        account: wallet.account,
+        calls: calls.map(({ to, data, value }) => ({ to, data, value })),
+      })
+      const { receipt } = await bundler.waitForUserOperationReceipt({ hash })
+      if (receipt.status !== 'success') throw new Error(calls.at(-1)!.failure)
+      return receipt.transactionHash
+    },
+  }
 }
 
+/** Sends `amount` of `token` out of the passkey wallet. A wallet that only holds EURC needs a little USDC for gas first. */
+export function sendFromPasskey(wallet: PasskeyWallet, token: Token, to: Hex, amount: bigint): Promise<Hex> {
+  const call: Call = isNative(token)
+    ? { to, data: '0x', value: amount, failure: 'The transfer failed.' }
+    : { to: token.address, data: encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [to, amount] }), failure: 'The transfer failed.' }
+  return asSender(wallet).send([call])
+}

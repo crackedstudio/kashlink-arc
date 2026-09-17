@@ -104,7 +104,7 @@ async function refund(targets: Row[], key: string) {
   for (const row of targets) {
     try {
       const amount = unclaimedOf(row)
-      await refundLink(props.wallet.client, row.id)
+      await refundLink(props.wallet, row.id)
       if (row.stored) saveLink({ ...row.stored, settled: 'refunded' })
       chainState[row.id] = { ...chainState[row.id], status: 'refunded' }
       track('link_refunded', amount, row.id)

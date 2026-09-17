@@ -14,8 +14,12 @@ defineProps<{
   linkCount: number
   expiredCount: number
   hasPasskey: boolean
+  openingPasskey: boolean
 }>()
-const emit = defineEmits<{ connect: [wallet: DiscoveredWallet], next: [], showLinks: [], stats: [], showWallet: [] }>()
+const emit = defineEmits<{ connect: [wallet: DiscoveredWallet], usePasskey: [], disconnect: [], next: [], showLinks: [], stats: [], showWallet: [] }>()
+
+/** Passkey wallets need a Circle client key; without one the option simply isn't offered. */
+const PASSKEYS = !!import.meta.env.VITE_CIRCLE_CLIENT_KEY
 
 const steps = [
   { title: 'Put USDC or EURC in a KashLink', text: 'For one person, or a drop the first few to open it share' },
@@ -130,11 +134,14 @@ function choose(wallet: DiscoveredWallet) {
     <template v-else-if="wallet">
       <p class="account muted">
         <Icon name="wallet" :size="16" />
-        {{ wallet.wallet.name }} · {{ shortAddress(wallet.address) }}
+        {{ wallet.name }} · {{ shortAddress(wallet.address) }}
         <strong v-if="balance !== null">{{ formatUsdc(balance) }}</strong>
       </p>
       <button class="btn btn-primary" @click="emit('next')">
         Create KashLink
+      </button>
+      <button v-if="wallet.passkey" class="link-btn switch" @click="emit('disconnect')">
+        Use a browser wallet instead
       </button>
     </template>
     <template v-else>
@@ -157,6 +164,14 @@ function choose(wallet: DiscoveredWallet) {
         </template>
         <template v-else>
           <Icon name="wallet" :size="20" /> Connect wallet
+        </template>
+      </button>
+      <button v-if="PASSKEYS" class="btn btn-outline" :disabled="connecting || openingPasskey" @click="emit('usePasskey')">
+        <template v-if="openingPasskey">
+          <span class="spinner" /> {{ hasPasskey ? 'Opening your wallet…' : 'Setting up your passkey…' }}
+        </template>
+        <template v-else>
+          {{ hasPasskey ? 'Use your KashLink wallet' : 'No wallet? Create one with a passkey' }}
         </template>
       </button>
     </template>
@@ -311,6 +326,12 @@ function choose(wallet: DiscoveredWallet) {
 
 .wallet-row img {
   border-radius: 6px;
+}
+
+.switch {
+  display: block;
+  width: 100%;
+  font-size: 13px;
 }
 
 .legal {

@@ -59,6 +59,40 @@ function hasSavedPasskey(): boolean {
   }
 }
 
+const openingPasskey = ref(false)
+
+/** Sends from the passkey wallet: reopens the one saved on this device, or registers a new passkey. */
+async function usePasskey() {
+  openingPasskey.value = true
+  walletError.value = null
+  try {
+    const passkey = await import('./lib/passkey')
+    const opened = hasPasskey.value ? await passkey.openPasskeyWallet() : await passkey.createPasskeyWallet()
+    hasPasskey.value = true
+    wallet.value = passkey.asSender(opened)
+    balance.value = null
+    await loadBalance()
+  }
+  catch (error) {
+    const text = `${(error as Error).name} ${(error as { details?: string }).details ?? (error as Error).message}`
+    walletError.value = /NotAllowed|abort|cancel/i.test(text)
+      ? 'Passkey request was cancelled.'
+      : /entity config|SecurityError|domain/i.test(text)
+        ? 'Passkey wallets are not set up for this site yet.'
+        : errorMessage(error)
+  }
+  finally {
+    openingPasskey.value = false
+  }
+}
+
+function disconnect() {
+  wallet.value = connected()
+  balance.value = null
+  usdcBalance.value = null
+  loadBalance()
+}
+
 function openWallet() {
   finishClaim()
   hasPasskey.value = true
@@ -165,7 +199,7 @@ async function send() {
   try {
     // Persist the key before any money moves, so the link can always be re-shared.
     saveLink(stored)
-    const fundingTx = await createLink(w.client, link, q, expirySeconds.value, () => (approving.value = true))
+    const fundingTx = await createLink(w, link, q, expirySeconds.value, () => (approving.value = true))
     const funded = { ...stored, fundingTx }
     saveLink(funded)
     track('link_created', q.total, link.id)
@@ -184,6 +218,12 @@ async function send() {
     sending.value = false
     approving.value = false
   }
+}
+
+function forgotPasskey() {
+  showWallet.value = false
+  hasPasskey.value = false
+  if (wallet.value?.passkey) disconnect()
 }
 
 function openLink(link: StoredLink) {
@@ -219,8 +259,8 @@ function finishClaim() {
   <IntroScreen
     v-else-if="screen === 'intro'"
     :wallet :connecting :wallet-error :balance="usdcBalance"
-    :link-count="links.length" :expired-count="expiredCount" :has-passkey="hasPasskey"
-    @connect="connectWallet" @next="startCreate" @show-links="showLinks = true" @stats="showStats" @show-wallet="showWallet = true"
+    :link-count="links.length" :expired-count="expiredCount" :has-passkey="hasPasskey" :opening-passkey="openingPasskey"
+    @connect="connectWallet" @use-passkey="usePasskey" @disconnect="disconnect" @next="startCreate" @show-links="showLinks = true" @stats="showStats" @show-wallet="showWallet = true"
   />
   <AmountScreen
     v-else-if="screen === 'amount'" :token :balance :usdc-balance :fees :slots :expiry-seconds="expirySeconds"
@@ -228,11 +268,11 @@ function finishClaim() {
   />
   <ReviewScreen
     v-else-if="quote && pendingLink" v-model:message="message" :quote :expiry-seconds="expirySeconds" :link-id="pendingLink.id"
-    :wallet-name="wallet?.wallet.name ?? 'your wallet'" :sending :approving :error="sendError"
+    :wallet-name="wallet?.name ?? 'your wallet'" :sending :approving :error="sendError"
     @back="screen = 'amount'" @send="send"
   />
 
   <LinksSheet v-if="showLinks" :links :wallet @connect="connectWallet" @open="openLink" @changed="links = loadLinks()" @close="showLinks = false" />
   <ReadySheet v-if="readyLink" :key="readyLink.id" :link="readyLink" :wallet @connect="connectWallet" @close="closeReady" />
-  <WalletSheet v-if="showWallet" @close="showWallet = false" @forgotten="showWallet = false; hasPasskey = false" />
+  <WalletSheet v-if="showWallet" @close="showWallet = false" @forgotten="forgotPasskey" />
 </template>

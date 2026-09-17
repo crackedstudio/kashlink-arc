@@ -93,7 +93,7 @@ async function refund() {
   refunding.value = true
   error.value = null
   try {
-    refundTx.value = await refundLink(props.wallet.client, props.link.id)
+    refundTx.value = await refundLink(props.wallet, props.link.id)
     saveLink({ ...props.link, settled: 'refunded' })
     chainState[props.link.id] = { ...state.value!, status: 'refunded' }
     track('link_refunded', state.value ? unclaimedAmount(state.value) : BigInt(props.link.amount), props.link.id)
