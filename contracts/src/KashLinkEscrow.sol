@@ -13,7 +13,10 @@ pragma solidity ^0.8.30;
  *
  * A link has `slots`. With one slot it is cash for one person. With more it is a drop: the first
  * `slots` addresses to open it each get `amountEach`, and the sender takes back whatever is left
- * after expiry. Every slot carries its own stipend, so every claim has gas.
+ * after expiry. Every slot carries its own stipend, so every claim has gas. A drop cannot tell people
+ * apart — addresses are free, so whoever holds the link can claim every slot — which makes it a
+ * first-come-first-served giveaway. To pay several specific people, `createMany` funds one
+ * single-slot link per person in one transaction, and `refundMany` returns the expired ones together.
  *
  * A link carries either native USDC (`token == address(0)`, 18-decimal `msg.value` units) or an
  * ERC-20 such as EURC (`token` set, the token's own decimals). The stipend is always native USDC.
@@ -55,6 +58,9 @@ contract KashLinkEscrow {
 
     /// @notice Upper bound on slots per link. Keeps the stipend and the refund maths trivially bounded.
     uint24 public constant MAX_SLOTS = 1000;
+
+    /// @notice Upper bound on links per `createMany` / `refundMany`, keeping one call well inside a block.
+    uint256 public constant MAX_BATCH = 100;
 
     /// @dev Lifetime counters, packed into one slot.
     struct Counters {
@@ -114,6 +120,7 @@ contract KashLinkEscrow {
     error ZeroAddress();
     error ZeroAmount();
     error BadSlots();
+    error BadBatch();
     error LinkExists(address linkId);
     error NotPending(address linkId);
     error AlreadyClaimed(address linkId, address to);
@@ -189,6 +196,21 @@ contract KashLinkEscrow {
         if (token == address(0)) value += tokenTotal;
     }
 
+    /**
+     * @notice What `createMany` costs for `count` single-slot links of `amountEach`: exactly `count`
+     *         separate `create` calls, so a fee floor applies to every link.
+     */
+    function quoteMany(address token, uint96 amountEach, uint256 count)
+        public
+        view
+        returns (uint256 tokenTotal, uint256 fee, uint256 value)
+    {
+        (tokenTotal, fee, value) = quote(token, amountEach, 1);
+        tokenTotal *= count;
+        fee *= count;
+        value *= count;
+    }
+
     // ---------------------------------------------------------------- links
 
     /**
@@ -207,40 +229,38 @@ contract KashLinkEscrow {
         payable
         nonReentrant
     {
-        if (linkId == address(0)) revert ZeroAddress();
-        if (amountEach == 0) revert ZeroAmount();
         if (slots == 0 || slots > MAX_SLOTS) revert BadSlots();
-        if (links[linkId].status != Status.None) revert LinkExists(linkId);
-        if (expiry <= block.timestamp) revert ExpiryInPast();
-
         (uint256 tokenTotal, uint256 fee, uint256 value) = quote(token, amountEach, slots);
         if (msg.value != value) revert WrongValue(value, msg.value);
 
-        links[linkId] = Link({
-            sender: msg.sender,
-            amountEach: amountEach,
-            token: token,
-            expiry: expiry,
-            slots: slots,
-            claimed: 0,
-            status: Status.Pending
-        });
-        emit LinkCreated(linkId, msg.sender, token, amountEach, slots, expiry);
-
-        _linksOf[msg.sender].push(linkId);
-        counters.links++;
-        if (slots > 1) counters.drops++;
-        // amountEach is uint96 and slots ≤ MAX_SLOTS, so the total is far below 2^128.
-        // forge-lint: disable-next-line(unsafe-typecast)
-        totals[token].sent += uint128(tokenTotal - fee);
-
+        _record(linkId, token, amountEach, slots, expiry);
         _pay(address(0), linkId, uint256(STIPEND) * slots);
-        if (token == address(0)) {
-            if (fee != 0) _pay(address(0), treasury, fee);
-        } else {
-            _pull(token, msg.sender, address(this), tokenTotal - fee);
-            if (fee != 0) _pull(token, msg.sender, treasury, fee);
+        _collect(token, tokenTotal, fee);
+    }
+
+    /**
+     * @notice Fund one single-slot link per id — cash for several specific people, each with a link
+     *         nobody else can use — in one transaction. Same rules and costs as that many `create`s.
+     * @dev `msg.value` must equal `quoteMany(token, amountEach, linkIds.length).value`. A duplicate id,
+     *      within the batch or with an existing link, reverts the whole batch.
+     */
+    function createMany(address[] calldata linkIds, address token, uint96 amountEach, uint40 expiry)
+        external
+        payable
+        nonReentrant
+    {
+        uint256 count = linkIds.length;
+        if (count == 0 || count > MAX_BATCH) revert BadBatch();
+        (uint256 tokenTotal, uint256 fee, uint256 value) = quoteMany(token, amountEach, count);
+        if (msg.value != value) revert WrongValue(value, msg.value);
+
+        for (uint256 i = 0; i < count; i++) {
+            _record(linkIds[i], token, amountEach, 1, expiry);
         }
+        for (uint256 i = 0; i < count; i++) {
+            _pay(address(0), linkIds[i], STIPEND);
+        }
+        _collect(token, tokenTotal, fee);
     }
 
     /**
@@ -268,19 +288,20 @@ contract KashLinkEscrow {
 
     /// @notice Take back whatever is unclaimed once the link has expired. Sender only.
     function refund(address linkId) external nonReentrant {
-        Link storage link = links[linkId];
-        if (link.status != Status.Pending) revert NotPending(linkId);
-        if (link.sender != msg.sender) revert NotSender();
-        if (block.timestamp < link.expiry) revert NotExpired(link.expiry);
+        _refund(linkId);
+    }
 
-        link.status = Status.Refunded;
-        uint256 amount = uint256(link.amountEach) * (link.slots - link.claimed);
-        emit LinkRefunded(linkId, msg.sender, amount);
-        counters.refunds++;
-        // forge-lint: disable-next-line(unsafe-typecast)
-        totals[link.token].refunded += uint128(amount);
-
-        _pay(link.token, msg.sender, amount);
+    /**
+     * @notice `refund` for several links in one transaction, e.g. the unclaimed ones of a `createMany`.
+     * @dev All or nothing: one link that is not refundable (claimed meanwhile, not expired, not the
+     *      caller's) reverts the batch, so a client should pass only links it has just read as pending.
+     */
+    function refundMany(address[] calldata linkIds) external nonReentrant {
+        uint256 count = linkIds.length;
+        if (count == 0 || count > MAX_BATCH) revert BadBatch();
+        for (uint256 i = 0; i < count; i++) {
+            _refund(linkIds[i]);
+        }
     }
 
     // ---------------------------------------------------------------- owner
@@ -302,6 +323,59 @@ contract KashLinkEscrow {
     }
 
     // ---------------------------------------------------------------- internal
+
+    /// @dev Validates and stores a new link and indexes it. Moves no money.
+    function _record(address linkId, address token, uint96 amountEach, uint24 slots, uint40 expiry) private {
+        if (linkId == address(0)) revert ZeroAddress();
+        if (amountEach == 0) revert ZeroAmount();
+        if (links[linkId].status != Status.None) revert LinkExists(linkId);
+        if (expiry <= block.timestamp) revert ExpiryInPast();
+
+        links[linkId] = Link({
+            sender: msg.sender,
+            amountEach: amountEach,
+            token: token,
+            expiry: expiry,
+            slots: slots,
+            claimed: 0,
+            status: Status.Pending
+        });
+        emit LinkCreated(linkId, msg.sender, token, amountEach, slots, expiry);
+
+        _linksOf[msg.sender].push(linkId);
+        counters.links++;
+        if (slots > 1) counters.drops++;
+        // amountEach is uint96 and slots ≤ MAX_SLOTS, so the total is far below 2^128.
+        // forge-lint: disable-next-line(unsafe-typecast)
+        totals[token].sent += uint128(uint256(amountEach) * slots);
+    }
+
+    /// @dev Takes the link total into escrow and the fee to the treasury. Native amounts arrived as
+    ///      `msg.value` already, so only the fee moves on; an ERC-20 is pulled from the sender.
+    function _collect(address token, uint256 tokenTotal, uint256 fee) private {
+        if (token == address(0)) {
+            if (fee != 0) _pay(address(0), treasury, fee);
+        } else {
+            _pull(token, msg.sender, address(this), tokenTotal - fee);
+            if (fee != 0) _pull(token, msg.sender, treasury, fee);
+        }
+    }
+
+    function _refund(address linkId) private {
+        Link storage link = links[linkId];
+        if (link.status != Status.Pending) revert NotPending(linkId);
+        if (link.sender != msg.sender) revert NotSender();
+        if (block.timestamp < link.expiry) revert NotExpired(link.expiry);
+
+        link.status = Status.Refunded;
+        uint256 amount = uint256(link.amountEach) * (link.slots - link.claimed);
+        emit LinkRefunded(linkId, msg.sender, amount);
+        counters.refunds++;
+        // forge-lint: disable-next-line(unsafe-typecast)
+        totals[link.token].refunded += uint128(amount);
+
+        _pay(link.token, msg.sender, amount);
+    }
 
     function _checkOwner() private view {
         if (msg.sender != owner) revert NotOwner();

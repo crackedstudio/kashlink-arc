@@ -2,7 +2,33 @@
 
 ## Arc Testnet (chain 5042002)
 
-### v3 — drops, EURC, built-in index (current)
+### v4 — `createMany` / `refundMany`: a link each for several people (current)
+
+Adds one-transaction funding of one single-slot link per person, because a drop cannot stop one
+holder of its link from claiming every slot to fresh addresses. The app sets
+`VITE_ESCROW_LEGACY=0xe16307FE8bADad783895A5c0047bEa76F152984F` so v3 links keep claiming and refunding.
+
+| | |
+|---|---|
+| KashLinkEscrow | [`0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62`](https://explorer.testnet.arc.io/address/0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62) — source verified |
+| Deploy tx | [`0x912a6559…85f9`](https://explorer.testnet.arc.io/tx/0x912a6559799803c4c80a879f8eca7b572a6422edf7adbf63a448de8449c585f9), block 62595721 |
+| Owner / treasury | `0x2e2729F897D4E5799ADe12B3D911b40BA0307Aa4` |
+| Fees | 1 % (100 bps), no floor |
+| Deployed | 2026-09-17 |
+
+Proof transactions:
+
+| Step | Tx |
+|---|---|
+| `createMany` three separate $0.10 USDC links, 45 s expiry (value 0.333 = 3 × (0.10 + 0.001 fee + 0.01 stipend); 425,767 gas) | [`0xe9e0deed…ef91`](https://explorer.testnet.arc.io/tx/0xe9e0deedd8c8537ce0f1b495c895b98ea388fe8f73d71f4a2a3feb930bddef91) |
+| `claim` link 1 → recipient gets $0.10 (102,801 gas) | [`0x32186363…5aea`](https://explorer.testnet.arc.io/tx/0x3218636350156cd564c4c2a9af9279095bc457b0e6b8b1bea738a3e96bf45aea) |
+| `claim` link 1 again to a fresh address | reverts `NotPending` — one link pays once |
+| `refundMany` links 2 and 3 after expiry, $0.20 back in one tx (89,024 gas) | [`0x8ee2db32…cd04`](https://explorer.testnet.arc.io/tx/0x8ee2db32741672d7781042be30335ec87963203cdb9f43e3861af014cac8cd04) |
+
+After these, `counters()` reads `(3 links, 0 drops, 1 claim, 2 refunds)`, `totals(USDC)` reads
+`(0.30 sent, 0.10 claimed, 0.20 refunded)`, and the escrow holds nothing.
+
+### v3 — drops, EURC, built-in index (superseded by v4)
 
 | | |
 |---|---|

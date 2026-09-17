@@ -17,6 +17,13 @@ export interface StoredLink {
   expiry: number
   createdAt: number
   fundingTx?: Hex
+  /** Escrow that holds it; absent on links from before this was recorded, which are looked up. */
+  escrow?: Hex
+  /**
+   * Set on links funded together as separate links for several people: the first link's id, this
+   * link's position, and how many there are. Absent on single links and drops.
+   */
+  batch?: { id: Hex, index: number, size: number }
   /**
    * Terminal state, cached once it is known. A claimed or refunded link can never change again, so
    * it is never looked up on chain a second time.
@@ -46,9 +53,28 @@ function write(list: StoredLink[]) {
 }
 
 export function saveLink(link: StoredLink) {
-  write([link, ...loadLinks().filter(l => l.id !== link.id)])
+  saveLinks([link])
+}
+
+/** Saves several at once, newest first in the order given; replaces any with the same id. */
+export function saveLinks(list: StoredLink[]) {
+  const ids = new Set(list.map(l => l.id))
+  write([...list, ...loadLinks().filter(l => !ids.has(l.id))])
 }
 
 export function removeLink(id: Hex) {
-  write(loadLinks().filter(l => l.id !== id))
+  removeLinks([id])
+}
+
+export function removeLinks(ids: Hex[]) {
+  const gone = new Set(ids)
+  write(loadLinks().filter(l => !gone.has(l.id)))
+}
+
+/** Every link funded together with `link`, in order; just `link` when it was not part of a batch. */
+export function batchOf(link: StoredLink): StoredLink[] {
+  if (!link.batch) return [link]
+  const id = link.batch.id
+  const found = loadLinks().filter(l => l.batch?.id === id).sort((a, b) => a.batch!.index - b.batch!.index)
+  return found.length ? found : [link]
 }

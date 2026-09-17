@@ -42,6 +42,15 @@ export const ESCROW_ADDRESS = (import.meta.env.VITE_ESCROW_ADDRESS ?? '') as Hex
 export const ESCROW_CONFIGURED = /^0x[0-9a-fA-F]{40}$/.test(ESCROW_ADDRESS)
 
 /**
+ * Earlier escrows on the same network, newest first. The contract has no upgrade path, so a new
+ * version is a new address; links funded on an old one are still claimed and refunded there.
+ */
+export const LEGACY_ESCROWS = (import.meta.env.VITE_ESCROW_LEGACY ?? '')
+  .split(',')
+  .map(a => a.trim())
+  .filter(a => /^0x[0-9a-fA-F]{40}$/.test(a) && a.toLowerCase() !== ESCROW_ADDRESS.toLowerCase()) as Hex[]
+
+/**
  * Arc's mempool silently drops anything with `maxFeePerGas` under 20 gwei — no error, no receipt,
  * the transaction just never lands. Every write goes through here so that floor is never missed.
  */

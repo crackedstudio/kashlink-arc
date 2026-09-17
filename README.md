@@ -3,18 +3,20 @@
 Send USDC as a link. No address, no account, no gas.
 
 KashLink turns an amount of USDC or EURC into a shareable link. Whoever opens it keeps the money.
-One link can be cash for one person or a **drop** the first few people to open it share. It runs on
+One link can be cash for one person; several people each get their own link, funded together; or an
+open **drop** is one link the first few to open it share. It runs on
 [Arc](https://arc.io), Circle's USDC-native chain, and it exists in this form *because* of Arc: on a
 chain where USDC is the gas token, a throwaway link can pay for its own claim.
 
 - **Live:** _mainnet deployment pending — see [`contracts/deployments.md`](contracts/deployments.md)_
-- **Contract:** `KashLinkEscrow` — [testnet, verified](https://explorer.testnet.arc.io/address/0xb66527AeBF350eA229829b12b8BBFdE88944d65b)
+- **Contract:** `KashLinkEscrow` — [testnet, verified](https://explorer.testnet.arc.io/address/0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62)
 - **Built for:** [Arc Microgrants](https://dorahacks.io/hackathon/arc-microgrants/detail)
 
 | | |
 |---|---|
 | **Cash links** | one link, one person, any amount of USDC or EURC |
-| **Drops** | one link, up to 100 people, first come first served, one slot per address |
+| **A link each** | up to 100 people, one link per person, funded in one transaction; nobody can take another's share |
+| **Open drops** | one link, up to 100 slots, first come first served — whoever holds it can claim every slot |
 | **Notes and QR** | a message rides in the link (never on a server); a QR for in-person handoff |
 | **Returns** | anything unclaimed comes back to the sender after 1, 7 or 30 days — from any device |
 | **No wallet? No problem** | a recipient can create a passkey wallet on the spot (Circle Modular Wallets) and claim into it |
@@ -53,9 +55,13 @@ stipend — so a recipient of euros never needs to hold anything either.
    to the treasury, and sends one cent per slot to the link address.
 3. The recipient opens the link, connects a wallet or pastes an address, and the app sends
    `claim(to)` **from the link address**, gas paid by that cent. The contract pays `amountEach` to
-   `to`. Each address can take one slot of a drop.
+   `to`. Each address can take one slot of a drop — but addresses are free, so a drop is only a
+   first-come-first-served giveaway: one holder of the link can claim every slot to fresh addresses.
+   To pay several **specific** people, the app funds one single-slot link per person with
+   `createMany(ids, token, amountEach, expiry)` instead; each link pays out once.
 4. If slots are left after `expiry` (the sender picks 1, 7 or 30 days), the sender presses Return and
    `refund(id)` sends the remainder back — from any device, since only the sender's wallet is needed.
+   `refundMany(ids)` returns several expired links in one transaction.
 
 **Whoever holds the link controls the money.** Share it like cash.
 
@@ -152,6 +158,7 @@ All `VITE_` variables are baked in at build time. See [`.env.example`](.env.exam
 |---|---|
 | `VITE_ARC_NETWORK` | `mainnet` / `testnet`. Default: testnet in dev, mainnet in production. |
 | `VITE_ESCROW_ADDRESS` | The escrow on that network. Unset ⇒ links can't be created. |
+| `VITE_ESCROW_LEGACY` | Comma-separated earlier escrows on the same network, so their links still claim and refund. |
 | `VITE_ESCROW_DEPLOY_BLOCK` | Where to start scanning for the wallet's past links. |
 | `VITE_PUBLIC_URL` | Public URL that shared links point at. |
 | `VITE_ARC_RPC_URL` | Override the public RPC. |
@@ -173,7 +180,7 @@ append events; it cannot read the table, enumerate links or erase history.
 ## Security notes
 
 - **The contract holds the money, not the app and not us.** The only paths out are `claim` (link
-  key) and `refund` (sender, after expiry). The app can disappear and both still work by calling the
+  key) and `refund` / `refundMany` (sender, after expiry). The app can disappear and both still work by calling the
   contract directly.
 - **Link keys never leave the device.** URL fragment plus `localStorage`. The page sends
   `Referrer-Policy: no-referrer` so a fragment can't leak through a referrer either.
@@ -184,6 +191,9 @@ append events; it cannot read the table, enumerate links or erase history.
 - **Stipend drain.** Someone holding a link could spend its cent on something else and leave the link
   unclaimable until the sender refunds it. The claim screen detects this and says so. Cost of the
   attack: the attacker's own cent, and the sender's fee.
+- **Drops are first come, first served.** The contract allows one slot per *address*, and addresses
+  are free, so whoever holds a drop link can claim every slot. The app labels drops that way and
+  defaults to a link each when paying several people, where one link can only ever pay once.
 - **Not audited.** Tests, yes; independent audit, no. Don't put more in a link than you'd hand over
   in cash.
 

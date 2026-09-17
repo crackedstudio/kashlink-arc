@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { formatUsdc } from '../lib/format'
-import { EXPIRY_OPTIONS, type FeeParams, MAX_SLOTS, quoteWith } from '../lib/links'
+import { EXPIRY_OPTIONS, type FeeParams, type LinkMode, MAX_SLOTS, quoteWith } from '../lib/links'
 import { formatAmount, isNative, parseAmount, type Token, TOKENS } from '../lib/tokens'
 import Icon from './Icon.vue'
 
@@ -13,23 +13,26 @@ const props = defineProps<{
   usdcBalance: bigint | null
   /** Contract fee settings, null until read. */
   fees: FeeParams | null
-  slots: number
+  people: number
+  mode: LinkMode
   expirySeconds: number
 }>()
 const emit = defineEmits<{
   'back': []
   'retry': []
   'update:token': [token: Token]
-  'continue': [amountEach: bigint, slots: number, expirySeconds: number]
+  'continue': [amountEach: bigint, people: number, mode: LinkMode, expirySeconds: number]
 }>()
 
 const input = ref('0')
-const slots = ref(props.slots)
+const slots = ref(props.people)
+const mode = ref<LinkMode>(props.mode)
 const expiry = ref(props.expirySeconds)
 const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del']
 const DECIMALS = 2
 
-const isDrop = computed(() => slots.value > 1)
+const several = computed(() => slots.value > 1)
+const isDrop = computed(() => several.value && mode.value === 'drop')
 
 const amountEach = computed(() => {
   const n = Number(input.value)
@@ -38,7 +41,7 @@ const amountEach = computed(() => {
   return parseAmount(input.value.replace(/\.$/, ''), props.token)
 })
 
-const quote = computed(() => (props.fees && amountEach.value ? quoteWith(props.fees, props.token, amountEach.value, slots.value) : null))
+const quote = computed(() => (props.fees && amountEach.value ? quoteWith(props.fees, props.token, amountEach.value, slots.value, mode.value) : null))
 
 /** A link costs the total plus fee (in the token) plus the stipends (always USDC). */
 const tooMuch = computed(() => {
@@ -58,10 +61,10 @@ const feeLine = computed(() => {
   const q = quote.value
   if (!q) return ''
   const extras = isNative(props.token)
-    ? formatAmount(q.fee + q.stipend * BigInt(q.slots), props.token)
+    ? formatAmount(q.fee + q.stipend * BigInt(q.people), props.token)
     : `${formatAmount(q.fee, props.token)} + ${formatUsdc(q.value)} gas`
-  return isDrop.value
-    ? `${formatAmount(q.total, props.token)} for ${q.slots} people + ${extras}`
+  return several.value
+    ? `${formatAmount(q.total, props.token)} for ${q.people} people + ${extras}`
     : `+ ${extras} fee · total ${formatAmount(isNative(props.token) ? q.value : q.tokenTotal, props.token)}`
 })
 
@@ -120,7 +123,7 @@ function selectToken(t: Token) {
         <span class="unit">{{ token.currency === 'EUR' ? '€' : '$' }}</span>{{ input }}<span class="caret" />
       </div>
       <p class="currency">
-        {{ token.symbol }} on Arc<template v-if="isDrop"> · each</template>
+        {{ token.symbol }} on Arc<template v-if="several"> · each</template>
       </p>
       <p class="secondary muted">
         {{ tooMuch ? '' : feeLine }}
@@ -132,7 +135,7 @@ function selectToken(t: Token) {
 
     <div class="options">
       <div class="option">
-        <span class="label">Split among</span>
+        <span class="label">Send to</span>
         <div class="stepper" role="group" aria-label="How many people">
           <button aria-label="Fewer people" :disabled="slots <= 1" @click="setSlots(slots - 1)">
             −
@@ -143,6 +146,24 @@ function selectToken(t: Token) {
           </button>
         </div>
       </div>
+      <template v-if="several">
+        <div class="mode" role="radiogroup" aria-label="How to send">
+          <button role="radio" :aria-checked="mode === 'separate'" :class="{ on: mode === 'separate' }" @click="mode = 'separate'">
+            <Icon name="link" :size="16" /> A link each
+          </button>
+          <button role="radio" :aria-checked="mode === 'drop'" :class="{ on: mode === 'drop' }" @click="mode = 'drop'">
+            <Icon name="drop" :size="16" /> Open drop
+          </button>
+        </div>
+        <p class="mode-hint" :class="{ warn: isDrop }">
+          <template v-if="isDrop">
+            <Icon name="alert" :size="14" /> One link, first come, first served. Whoever holds it can claim every slot, so share it only where that's fine.
+          </template>
+          <template v-else>
+            {{ slots }} separate links, one per person. Nobody can take someone else's share.
+          </template>
+        </p>
+      </template>
       <div class="option">
         <span class="label">Returnable after</span>
         <div class="expiry" role="group" aria-label="Expiry">
@@ -162,7 +183,7 @@ function selectToken(t: Token) {
       </button>
     </div>
 
-    <button class="btn btn-primary" :disabled="!canContinue" @click="emit('continue', amountEach, slots, expiry)">
+    <button class="btn btn-primary" :disabled="!canContinue" @click="emit('continue', amountEach, slots, mode, expiry)">
       Continue
     </button>
   </main>
@@ -309,6 +330,54 @@ function selectToken(t: Token) {
 .stepper button:disabled {
   opacity: 0.35;
   box-shadow: none;
+}
+
+.mode {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 500px;
+  background: var(--highlight);
+}
+
+.mode button {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  border: 0;
+  border-radius: 500px;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mode button.on {
+  background: var(--card);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+}
+
+.mode-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: -2px 4px 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.mode-hint.warn {
+  color: #a55a00;
+}
+
+.mode-hint :deep(svg) {
+  flex: none;
+  margin-top: 1px;
 }
 
 .expiry {

@@ -41,6 +41,19 @@ export const ESCROW_ABI = [
   },
   {
     "type": "function",
+    "name": "MAX_BATCH",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_FEE_BPS",
     "inputs": [],
     "outputs": [
@@ -173,6 +186,34 @@ export const ESCROW_ABI = [
         "name": "slots",
         "type": "uint24",
         "internalType": "uint24"
+      },
+      {
+        "name": "expiry",
+        "type": "uint40",
+        "internalType": "uint40"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "createMany",
+    "inputs": [
+      {
+        "name": "linkIds",
+        "type": "address[]",
+        "internalType": "address[]"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amountEach",
+        "type": "uint96",
+        "internalType": "uint96"
       },
       {
         "name": "expiry",
@@ -382,12 +423,64 @@ export const ESCROW_ABI = [
   },
   {
     "type": "function",
+    "name": "quoteMany",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amountEach",
+        "type": "uint96",
+        "internalType": "uint96"
+      },
+      {
+        "name": "count",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "tokenTotal",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "fee",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "refund",
     "inputs": [
       {
         "name": "linkId",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "refundMany",
+    "inputs": [
+      {
+        "name": "linkIds",
+        "type": "address[]",
+        "internalType": "address[]"
       }
     ],
     "outputs": [],
@@ -648,6 +741,11 @@ export const ESCROW_ABI = [
         "internalType": "address"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "BadBatch",
+    "inputs": []
   },
   {
     "type": "error",

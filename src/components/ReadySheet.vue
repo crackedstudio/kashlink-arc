@@ -20,7 +20,7 @@ const url = computed(() => linkUrl(props.link.key, props.link.message))
 const eachText = computed(() => formatAmount(BigInt(props.link.amount), token.value))
 const totalText = computed(() => formatAmount(BigInt(props.link.amount) * BigInt(slots.value), token.value))
 const shareText = computed(() => (isDrop.value
-  ? `I'm sharing ${totalText.value} in ${token.value.symbol} with ${slots.value} people — ${eachText.value} each, first come first served. Open the KashLink to claim yours:`
+  ? `I'm sharing ${totalText.value} in ${token.value.symbol} — ${eachText.value} each for the first ${slots.value} people to open this KashLink, first come first served:`
   : `I sent you ${eachText.value} in ${token.value.symbol} with a KashLink. Open it to claim:`))
 const whatsappUrl = computed(() => `https://wa.me/?text=${encodeURIComponent(`${shareText.value} ${url.value}`)}`)
 
@@ -107,7 +107,7 @@ async function refund() {
         <Icon :name="status === 'claimed' || status === 'refunded' ? 'check' : isDrop ? 'drop' : 'link'" :size="26" />
       </span>
       <p class="heading">
-        {{ status === 'refunded' ? 'KashLink returned' : status === 'claimed' ? (isDrop ? 'Drop fully claimed' : 'KashLink claimed') : isDrop ? 'Your drop is live!' : 'Your KashLink is ready!' }}
+        {{ status === 'refunded' ? 'KashLink returned' : status === 'claimed' ? (isDrop ? 'Drop fully claimed' : 'KashLink claimed') : isDrop ? 'Your open drop is live!' : 'Your KashLink is ready!' }}
       </p>
       <div class="amount">
         {{ eachText }}<span v-if="isDrop" class="each">each · {{ slots }} people</span>
@@ -140,7 +140,13 @@ async function refund() {
         <div v-if="showQr && qrSvg" class="qr" v-html="qrSvg" />
 
         <p class="warning muted">
-          <Icon name="alert" :size="18" /> Anyone with this link can claim the cash.
+          <Icon name="alert" :size="18" />
+          <template v-if="isDrop">
+            Open drop: first come, first served. Anyone with this link can claim every slot.
+          </template>
+          <template v-else>
+            Anyone with this link can claim the cash.
+          </template>
         </p>
 
         <p v-if="error" class="error">

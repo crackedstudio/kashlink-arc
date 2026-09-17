@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import AmountScreen from './components/AmountScreen.vue'
+import BatchSheet from './components/BatchSheet.vue'
 import ClaimScreen from './components/ClaimScreen.vue'
 import IntroScreen from './components/IntroScreen.vue'
 import LinksSheet from './components/LinksSheet.vue'
@@ -9,13 +10,13 @@ import ReviewScreen from './components/ReviewScreen.vue'
 import StatsScreen from './components/StatsScreen.vue'
 import WalletSheet from './components/WalletSheet.vue'
 import { track } from './lib/analytics'
-import { ESCROW_CONFIGURED } from './lib/arc'
+import { ESCROW_ADDRESS, ESCROW_CONFIGURED } from './lib/arc'
 import {
-  chainState, createLink, EXPIRY_OPTIONS, feeParams, type FeeParams, isExpired, newLink,
+  chainState, createLinks, EXPIRY_OPTIONS, feeParams, type FeeParams, isExpired, type LinkMode, newLink,
   type NewLink, parseHash, type ParsedHash, quoteWith, refreshStatuses,
 } from './lib/links'
 import { hasSavedPasskey } from './lib/passkey-cache'
-import { loadLinks, removeLink, saveLink, type StoredLink } from './lib/storage'
+import { batchOf, loadLinks, removeLinks, saveLinks, type StoredLink } from './lib/storage'
 import { getTokenBalance, type Token, USDC } from './lib/tokens'
 import { type Connected, connect, connected, type DiscoveredWallet, errorMessage, isUserRejection } from './lib/wallet'
 
@@ -34,18 +35,20 @@ const fees = ref<FeeParams | null>(null)
 
 const token = ref<Token>(USDC)
 const amount = ref(0n)
-const slots = ref(1)
+const people = ref(1)
+const mode = ref<LinkMode>('separate')
 const message = ref('')
 const expirySeconds = ref<number>(EXPIRY_OPTIONS[1].seconds)
-/** Generated when the review screen opens; funded when the user taps Send. */
-const pendingLink = ref<NewLink | null>(null)
+/** Generated when the review screen opens (one per link); funded when the user taps Send. */
+const pendingLinks = ref<NewLink[] | null>(null)
 const sending = ref(false)
 /** True while the wallet is showing the EURC approval, which precedes the deposit. */
 const approving = ref(false)
 const sendError = ref<string | null>(null)
 
 const links = ref<StoredLink[]>(loadLinks())
-const readyLink = ref<StoredLink | null>(null)
+/** The link just made or opened — or every link of a batch, for separate links. */
+const ready = ref<StoredLink[] | null>(null)
 const showLinks = ref(false)
 const showWallet = ref(false)
 /** A passkey wallet was made on this device (the credential is in localStorage). */
@@ -91,7 +94,7 @@ function openWallet() {
   showWallet.value = true
 }
 const expiredCount = computed(() => links.value.filter(l => chainState[l.id] && isExpired(chainState[l.id])).length)
-const quote = computed(() => (fees.value ? quoteWith(fees.value, token.value, amount.value, slots.value) : null))
+const quote = computed(() => (fees.value ? quoteWith(fees.value, token.value, amount.value, people.value, mode.value) : null))
 
 onMounted(() => {
   // Someone with a passkey wallet will likely open it; fetch the SDK (a third of the app) while idle,
@@ -106,7 +109,7 @@ onMounted(() => {
     const parsed = parseHash(location.hash)
     if (!parsed) return
     claimLink.value = parsed
-    readyLink.value = null
+    ready.value = null
     showLinks.value = false
     screen.value = 'claim'
   })
@@ -167,50 +170,57 @@ function startCreate() {
   loadBalance()
 }
 
-function onAmount(units: bigint, count: number, expiry: number) {
+function onAmount(units: bigint, count: number, how: LinkMode, expiry: number) {
   amount.value = units
-  slots.value = count
+  people.value = count
+  mode.value = how
   expirySeconds.value = expiry
   sendError.value = null
-  // Generate the key now, so the review screen can show where the money is going before it moves.
-  pendingLink.value = newLink()
+  // Generate the keys now, so the review screen can show where the money is going before it moves.
+  const linkCount = count > 1 && how === 'separate' ? count : 1
+  pendingLinks.value = Array.from({ length: linkCount }, () => newLink())
   screen.value = 'review'
 }
 
 async function send() {
-  const link = pendingLink.value
+  const pending = pendingLinks.value
   const w = wallet.value
   const q = quote.value
-  if (!link || !w || !q) return
+  if (!pending?.length || !w || !q) return
   sending.value = true
   approving.value = false
   sendError.value = null
-  const stored: StoredLink = {
+  const createdAt = Date.now()
+  const batchId = pending.length > 1 ? pending[0]!.id : undefined
+  const stored = pending.map<StoredLink>((link, index) => ({
     key: link.key,
     id: link.id,
     amount: amount.value.toString(),
     token: token.value.address,
-    slots: slots.value,
+    slots: q.slots,
     message: message.value.trim() || undefined,
-    expiry: Math.floor(Date.now() / 1000) + expirySeconds.value,
-    createdAt: Date.now(),
-  }
+    expiry: Math.floor(createdAt / 1000) + expirySeconds.value,
+    createdAt,
+    escrow: ESCROW_ADDRESS,
+    batch: batchId ? { id: batchId, index, size: pending.length } : undefined,
+  }))
+  const ids = pending.map(l => l.id)
   try {
-    // Persist the key before any money moves, so the link can always be re-shared.
-    saveLink(stored)
-    const fundingTx = await createLink(w, link, q, expirySeconds.value, () => (approving.value = true))
-    const funded = { ...stored, fundingTx }
-    saveLink(funded)
-    track('link_created', q.total, link.id)
+    // Persist the keys before any money moves, so the links can always be re-shared.
+    saveLinks(stored)
+    const fundingTx = await createLinks(w, pending, q, expirySeconds.value, () => (approving.value = true))
+    const funded = stored.map(l => ({ ...l, fundingTx }))
+    saveLinks(funded)
+    track('link_created', q.total, ids[0]!)
     links.value = loadLinks()
-    readyLink.value = funded
-    pendingLink.value = null
+    ready.value = funded
+    pendingLinks.value = null
     screen.value = 'intro'
     loadBalance()
   }
   catch (error) {
-    // Nothing was sent when the user declined, so the unused key can go.
-    if (isUserRejection(error)) removeLink(link.id)
+    // Nothing was sent when the user declined, so the unused keys can go.
+    if (isUserRejection(error)) removeLinks(ids)
     sendError.value = errorMessage(error)
   }
   finally {
@@ -227,11 +237,11 @@ function forgotPasskey() {
 
 function openLink(link: StoredLink) {
   showLinks.value = false
-  readyLink.value = link
+  ready.value = batchOf(link)
 }
 
 function closeReady() {
-  readyLink.value = null
+  ready.value = null
   links.value = loadLinks()
 }
 
@@ -262,16 +272,17 @@ function finishClaim() {
     @connect="connectWallet" @use-passkey="usePasskey" @disconnect="disconnect" @next="startCreate" @show-links="showLinks = true" @stats="showStats" @show-wallet="showWallet = true"
   />
   <AmountScreen
-    v-else-if="screen === 'amount'" :token :balance :usdc-balance :fees :slots :expiry-seconds="expirySeconds"
+    v-else-if="screen === 'amount'" :token :balance :usdc-balance :fees :people :mode :expiry-seconds="expirySeconds"
     @back="screen = 'intro'" @retry="loadBalance" @update:token="selectToken" @continue="onAmount"
   />
   <ReviewScreen
-    v-else-if="quote && pendingLink" v-model:message="message" :quote :expiry-seconds="expirySeconds" :link-id="pendingLink.id"
+    v-else-if="quote && pendingLinks" v-model:message="message" :quote :expiry-seconds="expirySeconds" :link-id="pendingLinks[0]!.id"
     :wallet-name="wallet?.name ?? 'your wallet'" :sending :approving :error="sendError"
     @back="screen = 'amount'" @send="send"
   />
 
   <LinksSheet v-if="showLinks" :links :wallet @connect="connectWallet" @open="openLink" @changed="links = loadLinks()" @close="showLinks = false" />
-  <ReadySheet v-if="readyLink" :key="readyLink.id" :link="readyLink" :wallet @connect="connectWallet" @close="closeReady" />
+  <BatchSheet v-if="ready && ready.length > 1" :key="ready[0]!.id" :links="ready" :wallet @connect="connectWallet" @close="closeReady" />
+  <ReadySheet v-else-if="ready" :key="ready[0]!.id" :link="ready[0]!" :wallet @connect="connectWallet" @close="closeReady" />
   <WalletSheet v-if="showWallet" @close="showWallet = false" @forgotten="forgotPasskey" />
 </template>

@@ -21,9 +21,11 @@ const message = defineModel<string>('message', { default: '' })
 const showHelp = ref(false)
 const token = computed(() => props.quote.token)
 const native = computed(() => isNative(token.value))
-const isDrop = computed(() => props.quote.slots > 1)
+const isDrop = computed(() => props.quote.mode === 'drop')
+const separate = computed(() => props.quote.mode === 'separate')
+const several = computed(() => props.quote.people > 1)
 const expiryLabel = computed(() => EXPIRY_OPTIONS.find(o => o.seconds === props.expirySeconds)?.label ?? `${Math.round(props.expirySeconds / 86_400)} days`)
-const gasText = computed(() => formatUsdc(props.quote.stipend * BigInt(props.quote.slots)))
+const gasText = computed(() => formatUsdc(props.quote.stipend * BigInt(props.quote.people)))
 /** What leaves the wallet, in words: one figure for USDC, two for EURC (token plus USDC gas). */
 const totalText = computed(() => (native.value
   ? formatAmount(props.quote.value, token.value)
@@ -43,16 +45,24 @@ const buttonText = computed(() => (native.value ? `Send ${totalText.value}` : `S
     <div class="summary">
       <span class="badge"><Icon :name="isDrop ? 'drop' : 'link'" :size="30" /></span>
       <p class="to muted">
-        {{ isDrop ? `A drop for ${quote.slots} people` : 'Sending to' }}
+        {{ isDrop ? `An open drop for ${quote.people} people` : separate ? `Sending to ${quote.people} people` : 'Sending to' }}
       </p>
-      <strong class="name">KashLink</strong>
+      <strong class="name">{{ separate ? `${quote.links} KashLinks` : 'KashLink' }}</strong>
       <div class="primary">
-        {{ formatAmount(quote.amountEach, token) }}<span v-if="isDrop" class="each">each</span>
+        {{ formatAmount(quote.amountEach, token) }}<span v-if="several" class="each">each</span>
       </div>
-      <a class="muted secondary" :href="addressUrl(linkId)" target="_blank" rel="noopener">
+      <p v-if="separate" class="muted secondary">
+        A link each: nobody can take someone else's share
+      </p>
+      <a v-else class="muted secondary" :href="addressUrl(linkId)" target="_blank" rel="noopener">
         {{ shortAddress(linkId) }} <Icon name="external" :size="12" />
       </a>
     </div>
+
+    <p v-if="isDrop" class="drop-warning">
+      <Icon name="alert" :size="16" />
+      <span>First come, first served. Anyone holding this link can claim every slot, so share it only where that's fine. To pay specific people, go back and choose <strong>A link each</strong>.</span>
+    </p>
 
     <label class="note">
       <span class="label">Add a note <span class="muted">(optional)</span></span>
@@ -61,7 +71,7 @@ const buttonText = computed(() => (native.value ? `Send ${totalText.value}` : `S
 
     <div class="card details">
       <div class="row">
-        <span class="muted">{{ isDrop ? `${quote.slots} people receive` : 'Your friend receives' }}</span>
+        <span class="muted">{{ several ? `${quote.people} people receive` : 'Your friend receives' }}</span>
         <strong>{{ formatAmount(quote.total, token) }}</strong>
       </div>
       <div class="row">
@@ -69,7 +79,7 @@ const buttonText = computed(() => (native.value ? `Send ${totalText.value}` : `S
         <strong>{{ quote.fee ? formatAmount(quote.fee, token) : 'Free' }}</strong>
       </div>
       <div class="row">
-        <span class="muted">Claim gas, prepaid{{ isDrop ? ` · ${quote.slots} ×` : '' }}</span>
+        <span class="muted">Claim gas, prepaid{{ several ? ` · ${quote.people} ×` : '' }}</span>
         <strong>{{ gasText }}</strong>
       </div>
       <div class="row">
@@ -110,6 +120,24 @@ const buttonText = computed(() => (native.value ? `Send ${totalText.value}` : `S
 </template>
 
 <style scoped>
+.drop-warning {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: rgb(252 135 2 / 10%);
+  color: #8a4b00;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.drop-warning :deep(svg) {
+  flex: none;
+  margin-top: 1px;
+}
+
 .summary {
   display: flex;
   flex: 1;

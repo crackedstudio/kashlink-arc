@@ -21,6 +21,31 @@ contract Reenterer {
     }
 }
 
+/// @dev A sender whose receive hook tries to refund again while `refundMany` is paying it.
+contract RefundReenterer {
+    KashLinkEscrow private immutable ESCROW;
+    address[] private _ids;
+
+    constructor(KashLinkEscrow escrow_) {
+        ESCROW = escrow_;
+    }
+
+    function fund(address[] memory ids, uint96 amountEach, uint40 expiry) external returns (address[] memory) {
+        (,, uint256 value) = ESCROW.quoteMany(address(0), amountEach, ids.length);
+        ESCROW.createMany{value: value}(ids, address(0), amountEach, expiry);
+        _ids = ids;
+        return ids;
+    }
+
+    function refund(address[] memory ids) external {
+        ESCROW.refundMany(ids);
+    }
+
+    receive() external payable {
+        if (msg.sender == address(ESCROW)) ESCROW.refundMany(_ids);
+    }
+}
+
 /// @dev A payout target that refuses money.
 contract Rejecter {
     receive() external payable {
@@ -565,6 +590,253 @@ contract KashLinkEscrowTest is Test {
         assertEq(claimedT, 7 ether);
         assertEq(refundedT, 4 ether, "two unclaimed slots of the drop");
         assertEq(sent - claimedT - refundedT, 0, "nothing left in escrow for USDC");
+    }
+
+    // ------------------------------------------------------------ separate links for several people
+
+    function _ids(uint256 count, uint256 seed) internal pure returns (address[] memory ids) {
+        ids = new address[](count);
+        for (uint256 i = 0; i < count; i++) {
+            ids[i] = vm.addr(seed + i);
+        }
+    }
+
+    function _createMany(address[] memory ids, address token, uint96 amountEach) internal returns (uint40 expiry) {
+        expiry = _expiry();
+        (,, uint256 value) = escrow.quoteMany(token, amountEach, ids.length);
+        vm.prank(sender);
+        escrow.createMany{value: value}(ids, token, amountEach, expiry);
+    }
+
+    function test_quoteMany_isCountTimesSingleQuote() public {
+        vm.prank(owner);
+        escrow.setFees(FEE_BPS, 0.5 ether, treasury); // a floor must apply per link, not once
+        (uint256 t1, uint256 f1, uint256 v1) = escrow.quote(NATIVE, 1 ether, 1);
+        (uint256 t, uint256 f, uint256 v) = escrow.quoteMany(NATIVE, 1 ether, 4);
+        assertEq(t, 4 * t1);
+        assertEq(f, 4 * 0.5 ether);
+        assertEq(f, 4 * f1);
+        assertEq(v, 4 * v1);
+    }
+
+    function test_createMany_fundsOneSingleSlotLinkPerId() public {
+        address[] memory ids = _ids(3, 100);
+        uint256 treasuryBefore = treasury.balance;
+        uint256 senderBefore = sender.balance;
+        (,, uint256 value) = escrow.quoteMany(NATIVE, 2 ether, 3);
+        uint40 expiry = _createMany(ids, NATIVE, 2 ether);
+
+        for (uint256 i = 0; i < ids.length; i++) {
+            (
+                address s,
+                uint96 each,
+                address token,
+                uint40 exp,
+                uint24 slots,
+                uint24 claimed_,
+                KashLinkEscrow.Status st
+            ) = escrow.links(ids[i]);
+            assertEq(s, sender);
+            assertEq(each, 2 ether);
+            assertEq(token, NATIVE);
+            assertEq(exp, expiry);
+            assertEq(slots, 1);
+            assertEq(claimed_, 0);
+            assertEq(uint8(st), uint8(KashLinkEscrow.Status.Pending));
+            assertEq(ids[i].balance, STIPEND, "every link gets its own stipend");
+        }
+        assertEq(address(escrow).balance, 6 ether);
+        assertEq(treasury.balance - treasuryBefore, 3 * 0.02 ether);
+        assertEq(senderBefore - sender.balance, value);
+
+        (uint64 links_, uint64 drops,,) = escrow.counters();
+        assertEq(links_, 3);
+        assertEq(drops, 0, "separate links are not drops");
+        (uint128 sent,,) = escrow.totals(NATIVE);
+        assertEq(sent, 6 ether);
+        assertEq(escrow.linksOf(sender).length, 3);
+    }
+
+    function test_createMany_emitsPerLink() public {
+        address[] memory ids = _ids(2, 100);
+        uint40 expiry = _expiry();
+        (,, uint256 value) = escrow.quoteMany(NATIVE, 1 ether, 2);
+        vm.expectEmit(address(escrow));
+        emit KashLinkEscrow.LinkCreated(ids[0], sender, NATIVE, 1 ether, 1, expiry);
+        vm.expectEmit(address(escrow));
+        emit KashLinkEscrow.LinkCreated(ids[1], sender, NATIVE, 1 ether, 1, expiry);
+        vm.prank(sender);
+        escrow.createMany{value: value}(ids, NATIVE, 1 ether, expiry);
+    }
+
+    /// @dev The reason `createMany` exists: with a drop, one holder of the link can take every slot by
+    ///      claiming to fresh addresses. With separate links, a link pays out once and only once.
+    function test_createMany_oneLinkCannotTakeAnothersShare() public {
+        address[] memory ids = _ids(3, 100);
+        _createMany(ids, NATIVE, 1 ether);
+
+        vm.prank(ids[0]);
+        escrow.claim(recipient);
+        vm.prank(ids[0]);
+        vm.expectRevert(abi.encodeWithSelector(KashLinkEscrow.NotPending.selector, ids[0]));
+        escrow.claim(makeAddr("sockpuppet"));
+
+        for (uint256 i = 1; i < ids.length; i++) {
+            address friend = vm.addr(900 + i);
+            vm.prank(ids[i]);
+            escrow.claim(friend);
+            assertEq(friend.balance, 1 ether, "everyone else still gets their share");
+        }
+    }
+
+    function test_createMany_erc20() public {
+        address[] memory ids = _ids(4, 100);
+        uint256 before = eurc.balanceOf(sender);
+        _createMany(ids, address(eurc), uint96(5 * EUR));
+        assertEq(eurc.balanceOf(address(escrow)), 20 * EUR);
+        assertEq(eurc.balanceOf(treasury), 4 * (5 * EUR / 100));
+        assertEq(before - eurc.balanceOf(sender), 20 * EUR + 4 * (5 * EUR / 100));
+        assertEq(address(escrow).balance, 0, "only stipends are native, and they went to the links");
+        assertEq(ids[3].balance, STIPEND);
+
+        vm.prank(ids[2]);
+        escrow.claim(recipient);
+        assertEq(eurc.balanceOf(recipient), 5 * EUR);
+    }
+
+    function test_createMany_reverts() public {
+        uint40 expiry = _expiry();
+        address[] memory none = new address[](0);
+        vm.prank(sender);
+        vm.expectRevert(KashLinkEscrow.BadBatch.selector);
+        escrow.createMany(none, NATIVE, 1 ether, expiry);
+
+        address[] memory tooMany = _ids(escrow.MAX_BATCH() + 1, 100);
+        vm.prank(sender);
+        vm.expectRevert(KashLinkEscrow.BadBatch.selector);
+        escrow.createMany(tooMany, NATIVE, 1 ether, expiry);
+
+        address[] memory ids = _ids(2, 100);
+        (,, uint256 value) = escrow.quoteMany(NATIVE, 1 ether, 2);
+        vm.prank(sender);
+        vm.expectRevert(abi.encodeWithSelector(KashLinkEscrow.WrongValue.selector, value, value - 1));
+        escrow.createMany{value: value - 1}(ids, NATIVE, 1 ether, expiry);
+
+        address[] memory dup = new address[](2);
+        dup[0] = ids[0];
+        dup[1] = ids[0];
+        vm.prank(sender);
+        vm.expectRevert(abi.encodeWithSelector(KashLinkEscrow.LinkExists.selector, ids[0]));
+        escrow.createMany{value: value}(dup, NATIVE, 1 ether, expiry);
+
+        _createAs(sender, ids[1], NATIVE, 1 ether, 1);
+        vm.prank(sender);
+        vm.expectRevert(abi.encodeWithSelector(KashLinkEscrow.LinkExists.selector, ids[1]));
+        escrow.createMany{value: value}(ids, NATIVE, 1 ether, expiry);
+
+        address[] memory withZero = new address[](2);
+        withZero[0] = ids[0];
+        vm.prank(sender);
+        vm.expectRevert(KashLinkEscrow.ZeroAddress.selector);
+        escrow.createMany{value: value}(withZero, NATIVE, 1 ether, expiry);
+
+        vm.prank(sender);
+        vm.expectRevert(KashLinkEscrow.ExpiryInPast.selector);
+        escrow.createMany{value: value}(_ids(2, 300), NATIVE, 1 ether, uint40(block.timestamp));
+
+        vm.prank(sender);
+        vm.expectRevert(KashLinkEscrow.ZeroAmount.selector);
+        escrow.createMany{value: 2 * STIPEND}(_ids(2, 300), NATIVE, 0, expiry);
+    }
+
+    function test_createMany_maxBatchFitsInABlock() public {
+        address[] memory ids = _ids(escrow.MAX_BATCH(), 10_000);
+        uint256 gasBefore = gasleft();
+        _createMany(ids, NATIVE, 1 ether);
+        assertLt(gasBefore - gasleft(), 30_000_000, "a full batch fits Arc's block gas limit");
+        assertEq(escrow.linksOf(sender).length, escrow.MAX_BATCH());
+    }
+
+    function test_refundMany_returnsTheUnclaimedOnes() public {
+        address[] memory ids = _ids(3, 100);
+        _createMany(ids, NATIVE, 1 ether);
+        vm.prank(ids[1]);
+        escrow.claim(recipient);
+
+        vm.warp(block.timestamp + WEEK);
+        address[] memory unclaimed = new address[](2);
+        unclaimed[0] = ids[0];
+        unclaimed[1] = ids[2];
+        uint256 before = sender.balance;
+        vm.prank(sender);
+        escrow.refundMany(unclaimed);
+
+        assertEq(sender.balance - before, 2 ether);
+        assertEq(uint8(_status(ids[0])), uint8(KashLinkEscrow.Status.Refunded));
+        assertEq(uint8(_status(ids[2])), uint8(KashLinkEscrow.Status.Refunded));
+        (,,, uint64 refunds) = escrow.counters();
+        assertEq(refunds, 2);
+        assertEq(address(escrow).balance, 0);
+    }
+
+    function test_refundMany_mixedTokens() public {
+        address a = vm.addr(201);
+        address b = vm.addr(202);
+        _createAs(sender, a, NATIVE, 1 ether, 1);
+        _createAs(sender, b, address(eurc), uint96(3 * EUR), 1);
+        vm.warp(block.timestamp + WEEK);
+        address[] memory both = new address[](2);
+        both[0] = a;
+        both[1] = b;
+        uint256 nativeBefore = sender.balance;
+        uint256 eurBefore = eurc.balanceOf(sender);
+        vm.prank(sender);
+        escrow.refundMany(both);
+        assertEq(sender.balance - nativeBefore, 1 ether);
+        assertEq(eurc.balanceOf(sender) - eurBefore, 3 * EUR);
+    }
+
+    function test_refundMany_isAllOrNothing() public {
+        address[] memory ids = _ids(2, 100);
+        _createMany(ids, NATIVE, 1 ether);
+        vm.warp(block.timestamp + WEEK);
+        vm.prank(ids[1]);
+        escrow.claim(recipient); // claimed between the client's read and the refund
+
+        vm.prank(sender);
+        vm.expectRevert(abi.encodeWithSelector(KashLinkEscrow.NotPending.selector, ids[1]));
+        escrow.refundMany(ids);
+        assertEq(uint8(_status(ids[0])), uint8(KashLinkEscrow.Status.Pending), "nothing refunded");
+    }
+
+    function test_refundMany_reverts() public {
+        address[] memory ids = _ids(2, 100);
+        _createMany(ids, NATIVE, 1 ether);
+
+        vm.prank(sender);
+        vm.expectRevert(abi.encodeWithSelector(KashLinkEscrow.NotExpired.selector, _expiry()));
+        escrow.refundMany(ids);
+
+        vm.warp(block.timestamp + WEEK);
+        vm.prank(recipient);
+        vm.expectRevert(KashLinkEscrow.NotSender.selector);
+        escrow.refundMany(ids);
+
+        vm.prank(sender);
+        vm.expectRevert(KashLinkEscrow.BadBatch.selector);
+        escrow.refundMany(new address[](0));
+    }
+
+    function test_refundMany_reentrancyIsBlocked() public {
+        address[] memory ids = _ids(1, 100);
+        _createMany(ids, NATIVE, 1 ether);
+        vm.warp(block.timestamp + WEEK);
+        RefundReenterer attacker = new RefundReenterer(escrow);
+        vm.deal(address(attacker), 10 ether);
+        address[] memory theirs = attacker.fund(_ids(2, 400), 1 ether, _expiry() - WEEK + 1);
+        vm.warp(block.timestamp + WEEK);
+        vm.expectRevert(abi.encodeWithSelector(KashLinkEscrow.TransferFailed.selector, NATIVE, address(attacker)));
+        attacker.refund(theirs);
     }
 
     // ------------------------------------------------------------ invariants

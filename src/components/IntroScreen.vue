@@ -23,7 +23,7 @@ const emit = defineEmits<{ connect: [wallet: DiscoveredWallet], usePasskey: [], 
 const PASSKEYS = !!import.meta.env.VITE_CIRCLE_CLIENT_KEY
 
 const steps = [
-  { title: 'Put USDC or EURC in a KashLink', text: 'For one person, or a drop the first few to open it share' },
+  { title: 'Put USDC or EURC in a KashLink', text: 'For one person, a link each for several, or an open drop' },
   { title: 'Share the link', text: 'Chat, QR code, or a note on the link — anyone holding it can claim' },
   { title: 'They receive the money', text: 'When they open it — no wallet setup, no gas, instant' },
 ]

@@ -3,9 +3,9 @@ import type { Hex } from 'viem'
 import { computed, onMounted, ref, watch } from 'vue'
 import { track } from '../lib/analytics'
 import { formatCountdown, formatDate } from '../lib/format'
-import { chainState, isExpired, linksFundedBy, type LinkStatus, refreshStatuses, refundLink, unclaimedAmount } from '../lib/links'
+import { chainState, isExpired, linksFundedBy, type LinkStatus, readLink, refreshStatuses, refundLinks, unclaimedAmount } from '../lib/links'
 import type { StoredLink } from '../lib/storage'
-import { saveLink } from '../lib/storage'
+import { saveLinks } from '../lib/storage'
 import { formatAmount, NATIVE, type Token, tokenByAddress } from '../lib/tokens'
 import { type Connected, discoverWallets, type DiscoveredWallet, errorMessage } from '../lib/wallet'
 import Icon from './Icon.vue'
@@ -98,27 +98,34 @@ async function refund(targets: Row[], key: string) {
   refunding.value = key
   error.value = null
   notice.value = null
-  const returned: Row[] = []
-  let failed = 0
-  // One at a time: each is a wallet prompt, and a failure must not stop the rest.
-  for (const row of targets) {
-    try {
-      const amount = unclaimedOf(row)
-      await refundLink(props.wallet, row.id)
-      if (row.stored) saveLink({ ...row.stored, settled: 'refunded' })
-      chainState[row.id] = { ...chainState[row.id], status: 'refunded' }
-      track('link_refunded', amount, row.id)
-      returned.push(row)
+  try {
+    // Re-read first: the refund is all or nothing, and someone may have claimed a moment ago.
+    await Promise.all(targets.map(async (row) => {
+      chainState[row.id] = await readLink(row.id, row.stored?.escrow)
+    }))
+    const still = targets.filter(row => chainState[row.id] && isExpired(chainState[row.id]!))
+    if (!still.length) {
+      notice.value = 'Those links were claimed in the meantime.'
+      return
     }
-    catch (e) {
-      failed++
-      if (targets.length === 1) error.value = errorMessage(e)
+    const amounts = new Map(still.map(row => [row.id, unclaimedOf(row)]))
+    const text = sumByToken(still, unclaimedOf)
+    // One transaction for the lot on the current escrow; one prompt in a passkey wallet either way.
+    await refundLinks(props.wallet, still.map(row => row.id))
+    saveLinks(still.flatMap(row => (row.stored ? [{ ...row.stored, settled: 'refunded' as const }] : [])))
+    for (const row of still) {
+      chainState[row.id] = { ...chainState[row.id]!, status: 'refunded' }
+      track('link_refunded', amounts.get(row.id)!, row.id)
     }
+    notice.value = `Returned ${text} to your wallet.`
   }
-  if (returned.length) notice.value = `Returned ${sumByToken(returned, unclaimedOf)} to your wallet.`
-  if (failed && targets.length > 1) error.value = `${failed} link${failed > 1 ? 's' : ''} could not be returned. Try again in a moment.`
-  refunding.value = null
-  emit('changed')
+  catch (e) {
+    error.value = errorMessage(e)
+  }
+  finally {
+    refunding.value = null
+    emit('changed')
+  }
 }
 </script>
 
@@ -166,7 +173,7 @@ async function refund(targets: Row[], key: string) {
         <li v-for="row in rows" :key="row.id">
           <button class="row" :disabled="!row.stored" @click="row.stored && emit('open', row.stored)">
             <span class="info">
-              <strong>{{ formatAmount(row.amountEach, row.token) }}<template v-if="row.slots > 1"> × {{ row.slots }}</template></strong>
+              <strong>{{ formatAmount(row.amountEach, row.token) }}<template v-if="row.slots > 1"> × {{ row.slots }} · open drop</template><template v-else-if="row.stored?.batch"> · link {{ row.stored.batch.index + 1 }} of {{ row.stored.batch.size }}</template></strong>
               <span class="muted">
                 <template v-if="row.createdAt">{{ formatDate(row.createdAt) }}</template>
                 <template v-else>From another device · can't re-share</template>
