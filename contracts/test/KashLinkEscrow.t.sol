@@ -6,17 +6,17 @@ import {KashLinkEscrow} from "../src/KashLinkEscrow.sol";
 
 /// @dev A payout target that tries to claim again from inside its receive hook.
 contract Reenterer {
-    KashLinkEscrow private immutable escrow;
+    KashLinkEscrow private immutable ESCROW;
     bool public attacked;
 
     constructor(KashLinkEscrow escrow_) {
-        escrow = escrow_;
+        ESCROW = escrow_;
     }
 
     receive() external payable {
         if (!attacked) {
             attacked = true;
-            escrow.claim(address(this));
+            ESCROW.claim(address(this));
         }
     }
 }
