@@ -22,7 +22,5 @@ runs = 512
 arc = "${ARC_MAINNET_RPC_URL}"
 arc_testnet = "${ARC_TESTNET_RPC_URL}"
 
-# Arc's explorer is Blockscout: `forge verify-contract … --verifier blockscout --verifier-url <url>`.
-[etherscan]
-arc = { key = "", url = "https://explorer.arc.io/api/", chain = 5042 }
-arc_testnet = { key = "", url = "https://explorer.testnet.arc.io/api/", chain = 5042002 }
+# Arc's explorer is Blockscout. Verify with explicit flags (see README); an [etherscan] section
+# here makes forge reject the chain id.

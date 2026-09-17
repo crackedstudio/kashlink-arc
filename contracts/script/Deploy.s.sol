@@ -11,7 +11,8 @@ import {KashLinkEscrow} from "../src/KashLinkEscrow.sol";
  *   FEE_BPS   fee rate in basis points (default 100 = 1%)
  *   FEE_MIN   fee floor in native 18-decimal units (default 0.10 USDC)
  *
- * The broadcasting account becomes the owner.
+ * The broadcasting account becomes the owner unless OWNER is set. Read after `startBroadcast`, because
+ * `msg.sender` in a script is Foundry's default sender, not the `--account` signer.
  */
 contract Deploy is Script {
     function run() external returns (KashLinkEscrow escrow) {
@@ -20,11 +21,13 @@ contract Deploy is Script {
         uint96 feeMin = uint96(vm.envOr("FEE_MIN", uint256(0.1 ether)));
 
         vm.startBroadcast();
-        escrow = new KashLinkEscrow(msg.sender, treasury, feeBps, feeMin);
+        (, address deployer,) = vm.readCallers();
+        address owner = vm.envOr("OWNER", deployer);
+        escrow = new KashLinkEscrow(owner, treasury, feeBps, feeMin);
         vm.stopBroadcast();
 
         console.log("KashLinkEscrow:", address(escrow));
-        console.log("owner:         ", msg.sender);
+        console.log("owner:         ", owner);
         console.log("treasury:      ", treasury);
         console.log("feeBps / feeMin:", feeBps, feeMin);
     }
