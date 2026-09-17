@@ -5,6 +5,7 @@ import { addressUrl, txUrl } from '../lib/arc'
 import { shortAddress } from '../lib/format'
 import type { PasskeyWallet } from '../lib/passkey'
 import { formatAmount, getTokenBalance, parseAmount, type Token, TOKENS, USDC } from '../lib/tokens'
+import { copyText } from '../lib/clipboard'
 import { errorMessage } from '../lib/wallet'
 import Icon from './Icon.vue'
 
@@ -58,14 +59,9 @@ onMounted(async () => {
 
 async function copy() {
   if (!wallet.value) return
-  try {
-    await navigator.clipboard.writeText(wallet.value.address)
-    copied.value = true
-    setTimeout(() => (copied.value = false), 2000)
-  }
-  catch {
-    // clipboard unavailable on plain-http dev URLs
-  }
+  await copyText(wallet.value.address)
+  copied.value = true
+  setTimeout(() => (copied.value = false), 2000)
 }
 
 async function send() {
@@ -110,8 +106,8 @@ async function forget() {
       </p>
 
       <template v-if="wallet">
-        <button class="address" @click="copy">
-          <span class="mono">{{ shortAddress(wallet.address) }}</span>
+        <button class="address" :title="wallet.address" :aria-label="copied ? 'Address copied' : 'Copy your wallet address'" @click="copy">
+          <span class="mono">{{ copied ? 'Address copied' : shortAddress(wallet.address) }}</span>
           <Icon :name="copied ? 'check' : 'copy'" :size="16" />
         </button>
         <div class="balances">

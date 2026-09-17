@@ -6,6 +6,7 @@ import { formatCountdown, formatDate } from '../lib/format'
 import { chainState, isExpired, linkUrl, refreshStatuses, refundLink, unclaimedAmount } from '../lib/links'
 import { saveLink, type StoredLink } from '../lib/storage'
 import { formatAmount, NATIVE, tokenByAddress } from '../lib/tokens'
+import { copyText } from '../lib/clipboard'
 import { type Connected, discoverWallets, type DiscoveredWallet, errorMessage } from '../lib/wallet'
 import Icon from './Icon.vue'
 
@@ -50,18 +51,7 @@ watch(showQr, async (on) => {
 })
 
 async function copy() {
-  try {
-    await navigator.clipboard.writeText(url.value)
-  }
-  catch {
-    // Clipboard API is unavailable on plain-HTTP LAN dev URLs
-    const el = document.createElement('textarea')
-    el.value = url.value
-    document.body.append(el)
-    el.select()
-    document.execCommand('copy')
-    el.remove()
-  }
+  await copyText(url.value)
   copied.value = true
   setTimeout(() => (copied.value = false), 2000)
 }

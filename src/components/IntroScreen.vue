@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { CHAIN, ESCROW_CONFIGURED, IS_MAINNET } from '../lib/arc'
-import { formatUsdc, shortAddress } from '../lib/format'
+import { formatUsdc } from '../lib/format'
 import { type Connected, discoverWallets, type DiscoveredWallet } from '../lib/wallet'
+import CopyAddress from './CopyAddress.vue'
 import Icon from './Icon.vue'
 import Logo from './Logo.vue'
 
@@ -134,7 +135,7 @@ function choose(wallet: DiscoveredWallet) {
     <template v-else-if="wallet">
       <p class="account muted">
         <Icon name="wallet" :size="16" />
-        {{ wallet.name }} · {{ shortAddress(wallet.address) }}
+        {{ wallet.name }} <CopyAddress :address="wallet.address" />
         <strong v-if="balance !== null">{{ formatUsdc(balance) }}</strong>
       </p>
       <button class="btn btn-primary" @click="emit('next')">
