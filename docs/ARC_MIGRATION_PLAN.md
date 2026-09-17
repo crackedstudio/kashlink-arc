@@ -83,7 +83,7 @@ mapping(address linkId => Link) public links;
 address public owner;            // fee governance only; cannot touch escrowed funds
 address public treasury;
 uint16  public feeBps;           // hard-capped: require(feeBps <= 500)  (5 %)
-uint96  public feeMin;           // e.g. 0.10 USDC = 1e17
+uint96  public feeMin;           // optional floor; 0 in production (flat 1%)
 uint96  public constant STIPEND = 1e16;   // 0.01 USDC, ~8× a claim's gas at the 20 gwei floor
 
 function feeFor(uint256 amount) public view returns (uint256);   // max(amount*feeBps/1e4, feeMin), 0 if feeBps==0 && feeMin==0

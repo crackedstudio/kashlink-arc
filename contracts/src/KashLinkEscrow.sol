@@ -51,7 +51,8 @@ contract KashLinkEscrow {
     address public treasury;
     /// @notice Fee rate in basis points of the link amount. Zero switches fees off entirely.
     uint16 public feeBps;
-    /// @notice Minimum fee per link, native units. Only applies while `feeBps` is non-zero.
+    /// @notice Optional floor on the fee, native units; zero means a flat percentage. Only applies
+    ///         while `feeBps` is non-zero.
     uint96 public feeMin;
 
     uint256 private _entered = 1;

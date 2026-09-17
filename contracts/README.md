@@ -11,7 +11,7 @@ forge test
 ## Deploy
 
 Both networks use the same commands; only the RPC alias and the keystore account differ. Copy
-`.env.example` to `.env` first (git-ignored) and set `TREASURY`.
+`.env.example` to `.env` first (git-ignored) and set `TREASURY`. Fees default to a flat 1% (`FEE_MIN=0`).
 
 Arc's mempool drops transactions whose `maxFeePerGas` is under 20 gwei, so the `--with-gas-price`
 flag below is not optional.

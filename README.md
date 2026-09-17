@@ -48,7 +48,7 @@ confirmation countdown.
 ## The contract
 
 [`contracts/src/KashLinkEscrow.sol`](contracts/src/KashLinkEscrow.sol), ~200 lines, no
-dependencies, 33 Foundry tests including reentrancy and fee fuzzing.
+dependencies, 34 Foundry tests including reentrancy and fee fuzzing.
 
 | | |
 |---|---|
@@ -68,7 +68,7 @@ Everything is native USDC in 18-decimal wei — `msg.value`, `eth_getBalance`. T
 
 | | |
 |---|---|
-| Service fee | **1%**, minimum **$0.10**, paid by the sender on top |
+| Service fee | **1%** flat, paid by the sender on top — no minimum, so a $1 link costs a cent |
 | Prepaid claim gas | **$0.01**, sent to the link address; a claim uses ~$0.0014 of it |
 | Charged | at creation, whether the link is later claimed or returned |
 
@@ -109,12 +109,12 @@ npm install
 cp .env.example .env       # points at the verified testnet contract by default
 npm run dev                # http://localhost:5191, Arc Testnet
 npm test                   # vitest
-cd contracts && forge test # 33 tests
+cd contracts && forge test # 34 tests
 ```
 
 Get testnet USDC from [faucet.circle.com](https://faucet.circle.com) (network: Arc Testnet). Any
 EVM wallet works as the sender; the app adds the Arc network to it on connect. Claiming needs no
-wallet at all — paste any address.
+wallet at all — connect one, or paste any address.
 
 `npm run build` type-checks and bundles to `dist/`. Production builds default to mainnet.
 

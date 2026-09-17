@@ -13,11 +13,11 @@ select
               / nullif(count(*) filter (where type = 'link_created'), 0), 1) as claim_rate_pct
 from public.events;
 
--- Fee revenue: 1% with a $0.10 floor, taken at creation, so it mirrors what reached the treasury.
+-- Fee revenue: a flat 1%, taken at creation, so it mirrors what reached the treasury.
 -- Cross-check against the treasury address on explorer.arc.io.
 select
   count(*)                                                        as links_created,
-  round(sum(greatest(value_units * 0.01, 1e17)) / 1e18, 2)        as fees_usd
+  round(sum(value_units * 0.01) / 1e18, 2)                        as fees_usd
 from public.events
 where type = 'link_created';
 

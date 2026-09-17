@@ -74,6 +74,15 @@ contract KashLinkEscrowTest is Test {
         assertEq(escrow.feeFor(10 ether + 1), FEE_MIN); // 1% of this rounds below the floor
     }
 
+    function test_feeFor_flatPercentWithoutFloor() public {
+        vm.prank(owner);
+        escrow.setFees(FEE_BPS, 0, treasury);
+        assertEq(escrow.feeFor(1 ether), 0.01 ether);
+        assertEq(escrow.feeFor(0.5 ether), 0.005 ether);
+        assertEq(escrow.feeFor(1), 0, "1 wei rounds to no fee");
+        assertEq(escrow.totalFor(1 ether), 1.01 ether + STIPEND);
+    }
+
     function test_feeFor_zeroWhenDisabled() public {
         vm.prank(owner);
         escrow.setFees(0, FEE_MIN, address(0));
