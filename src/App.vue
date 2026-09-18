@@ -309,7 +309,7 @@ function finishClaim() {
     @connect="connectWallet" @use-passkey="usePasskey()" @sign-in-passkey="usePasskey('open')" @disconnect="disconnect" @next="startCreate" @show-links="showLinks = true" @stats="showStats" @show-wallet="showWallet = true" @refresh="loadBalance"
   />
   <AmountScreen
-    v-else-if="screen === 'amount'" :token :balance :usdc-balance :fees :people :mode :expiry-seconds="expirySeconds" :gas-reserve="reserve"
+    v-else-if="screen === 'amount'" :token :balance :usdc-balance :fees :people :mode :expiry-seconds="expirySeconds" :gas-reserve="reserve" :passkey="!!wallet?.passkey"
     @back="screen = 'intro'" @retry="loadBalance" @update:token="selectToken" @continue="onAmount"
   />
   <ReviewScreen

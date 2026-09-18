@@ -19,6 +19,11 @@ const props = defineProps<{
   expirySeconds: number
   /** Native USDC kept back for the sender's own transaction fee. */
   gasReserve: bigint
+  /**
+   * The sender is a passkey wallet. Its reserve is a prefund the bundler holds for the whole gas
+   * limit and mostly refunds, not a fee, so it is described as money on hand rather than a cost.
+   */
+  passkey: boolean
 }>()
 const emit = defineEmits<{
   'back': []
@@ -59,11 +64,17 @@ const short = computed(() => {
   return shortfall(quote.value, props.balance, props.usdcBalance ?? props.balance, reserve.value)
 })
 const tooMuch = computed(() => short.value !== null)
+/** True when the sender's reserve is a refundable hold rather than a fee worth mentioning. */
+const holdsPrefund = computed(() => props.passkey && reserve.value > 0n)
 const tooMuchText = computed(() => {
   const s = short.value
   if (!s) return ''
   const have = formatAmount(s.have, s.token)
   const need = formatAmount(s.need, s.token)
+  if (holdsPrefund.value && (s.reason === 'gas' || s.token === USDC)) {
+    const cost = formatAmount(s.need - reserve.value, s.token)
+    return `This costs ${cost}, and your KashLink wallet needs about ${formatUsdc(reserve.value)} more on hand while it sends — most of that comes straight back. You have ${have}.`
+  }
   if (s.reason === 'gas') return `Needs ${need} of USDC for claim gas and the network fee — you have ${have}`
   return `Not enough ${s.token.symbol}: this costs ${need} with fees${s.token === USDC ? ' and gas' : ''}, you have ${have}`
 })
@@ -156,8 +167,11 @@ function selectToken(t: Token) {
         Max
       </button>
     </div>
-    <p v-if="balance !== null && !max && fees" class="hint error">
-      This wallet can't fund a link yet: it needs {{ token.symbol }} for the amount<template v-if="!isNative(token)"> and</template><template v-else>,</template> USDC for {{ formatUsdc(fees.stipend * BigInt(slots)) }} of claim gas and about {{ formatUsdc(reserve) }} of network fee.
+    <p v-if="balance !== null && !max && fees && holdsPrefund" class="hint muted">
+      Not enough to send yet. Besides the amount<template v-if="isNative(token)"> and {{ formatUsdc(fees.stipend * BigInt(slots)) }} of claim gas</template><template v-else>, plus {{ formatUsdc(fees.stipend * BigInt(slots)) }} of USDC for claim gas</template>, your KashLink wallet needs about {{ formatUsdc(reserve) }} on hand while it sends — most of that comes straight back afterwards.
+    </p>
+    <p v-else-if="balance !== null && !max && fees" class="hint error">
+      This wallet can't fund a link yet: it needs {{ token.symbol }} for the amount<template v-if="!isNative(token)">, plus USDC for</template><template v-else>, plus</template> {{ formatUsdc(fees.stipend * BigInt(slots)) }} of claim gas and about {{ formatUsdc(reserve) }} of network fee.
     </p>
     <div class="display">
       <label class="amount">
