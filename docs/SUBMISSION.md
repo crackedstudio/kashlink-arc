@@ -7,11 +7,11 @@ mainnet deploy.
 
 | | |
 |---|---|
-| Live app | https://kashlinkarc.vercel.app |
+| Live app | https://arc.kashlink.live |
 | Repo | https://github.com/crackedstudio/kashlink-arc (public, MIT) |
 | Contract (Arc mainnet) | [`0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62`](https://explorer.arc.io/address/0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62), deploy tx [`0x229fa32c…cb29`](https://explorer.arc.io/tx/0x229fa32c19ad2291dc8aa52a5959bace6881c1c0147cc12fd5ff4254ba69cb29) |
 | Contract (Arc testnet) | [same address](https://explorer.testnet.arc.io/address/0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62), verified |
-| Live stats | https://kashlinkarc.vercel.app/stats |
+| Live stats | https://arc.kashlink.live/stats |
 | Builder profile | `TODO` GitHub / X / Farcaster |
 
 ## Description (≈150 words, for the form)

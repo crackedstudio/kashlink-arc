@@ -8,8 +8,8 @@ open **drop** is one link the first few to open it share. It runs on
 [Arc](https://arc.io), Circle's USDC-native chain, and it exists in this form *because* of Arc: on a
 chain where USDC is the gas token, a throwaway link can pay for its own claim.
 
-- **Live:** _mainnet deployment pending — see [`contracts/deployments.md`](contracts/deployments.md)_
-- **Contract:** `KashLinkEscrow` — [testnet, verified](https://explorer.testnet.arc.io/address/0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62)
+- **Live:** https://arc.kashlink.live — Arc mainnet
+- **Contract:** `KashLinkEscrow` [`0x4d6c…9C62`](https://explorer.arc.io/address/0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62) on mainnet, and the [same address on testnet](https://explorer.testnet.arc.io/address/0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62) (verified)
 - **Built for:** [Arc Microgrants](https://dorahacks.io/hackathon/arc-microgrants/detail)
 
 | | |
