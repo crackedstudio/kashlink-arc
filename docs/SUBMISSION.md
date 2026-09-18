@@ -55,8 +55,10 @@ Testnet equivalents for every step are in [`contracts/deployments.md`](../contra
 
 ## Demo
 
-`TODO` 60–90 s screen recording: create a drop with a note → share → open on a phone → claim with a
-passkey wallet → stats page. Loom or a `docs/demo.mp4`.
+~2 min Remotion video with voice-over and music in [`video/`](../video/README.md): the problem, why Arc (USDC-as-gas flow),
+sender walkthrough (amount → review → ready sheet with QR), recipient walkthrough (chat → claim →
+passkey wallet → received), features, contract credibility, links. `cd video && npm install && npm run render`
+→ `video/out/kashlink-demo.mp4`. Upload to YouTube/Loom and paste the link in the DoraHacks form.
 
 ## Screenshots
 

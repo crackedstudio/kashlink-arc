@@ -1,0 +1,107 @@
+{
+  "hook-0": {
+    "hash": "09b96041bf",
+    "duration": 6.687347,
+    "text": "KashLink sends USDC as a link. No address, no account, no gas. Live on Arc mainnet."
+  },
+  "problem-0": {
+    "hash": "f3aa44b06f",
+    "duration": 2.693515,
+    "text": "Every cash-link product has the same problem."
+  },
+  "problem-1": {
+    "hash": "490ede9ca5",
+    "duration": 4.365351,
+    "text": "The link is a fresh address. It holds the money, but has no gas to move it."
+  },
+  "problem-2": {
+    "hash": "9b1fca0e2a",
+    "duration": 7.337506,
+    "text": "So you bolt on a relayer, a hot wallet, meta-transactions, and an API. Our Polygon version needed all four."
+  },
+  "problem-3": {
+    "hash": "4909828680",
+    "duration": 2.368435,
+    "text": "Arc makes every one of them unnecessary."
+  },
+  "arc-0": {
+    "hash": "9697b45ca2",
+    "duration": 1.904036,
+    "text": "On Arc, USDC is the gas."
+  },
+  "arc-1": {
+    "hash": "bfef616928",
+    "duration": 5.433469,
+    "text": "The sender funds the link once: the amount, a one percent fee, and one cent per slot."
+  },
+  "arc-2": {
+    "hash": "58b1264452",
+    "duration": 5.665669,
+    "text": "The contract drops that cent on the link's own address. And that cent is the gas for the claim."
+  },
+  "arc-3": {
+    "hash": "b943f97b3d",
+    "duration": 5.758549,
+    "text": "The recipient signs one plain transaction with the key in the link. The chain just accepts it."
+  },
+  "arc-4": {
+    "hash": "85103fcafc",
+    "duration": 3.993832,
+    "text": "No relayer. No second token. No wallet to install first."
+  },
+  "demo-0": {
+    "hash": "0ba82fa9d1",
+    "duration": 8.173424,
+    "text": "Fund it once. Pick USDC or E-U-R-C, an amount, and who: one person, a link each, or an open drop."
+  },
+  "demo-1": {
+    "hash": "acc2b23b43",
+    "duration": 5.619229,
+    "text": "One transaction funds everything: the money, the fee, and a cent of claim gas per person."
+  },
+  "demo-2": {
+    "hash": "a66592f8b0",
+    "duration": 6.222948,
+    "text": "The key rides in the URL and never touches a server. Share it by chat, or hold up the QR code."
+  },
+  "claim-0": {
+    "hash": "ce11890169",
+    "duration": 4.179592,
+    "text": "For the recipient, the link arrives like any message. Nothing to install."
+  },
+  "claim-1": {
+    "hash": "0546d62d86",
+    "duration": 5.944308,
+    "text": "No wallet? Face ID creates a passkey wallet on the spot, and the claim goes straight into it."
+  },
+  "claim-2": {
+    "hash": "ab69ee84bd",
+    "duration": 5.990748,
+    "text": "One plain transaction, paid from the cent on the link. Instant finality: received a block later."
+  },
+  "features-0": {
+    "hash": "3b0f6b9cb1",
+    "duration": 9.334422,
+    "text": "Cash links. A link each. Open drops. Notes and QR codes. Returns. Passkey wallets. E-U-R-C. And live stats."
+  },
+  "contract-0": {
+    "hash": "ab189e79ef",
+    "duration": 8.266304,
+    "text": "About 260 lines of Solidity, 39 Foundry tests, no proxy, no pause. The app never holds the money."
+  },
+  "contract-1": {
+    "hash": "d4c4adb790",
+    "duration": 6.130068,
+    "text": "The only ways out of escrow are a claim with the link key, or a refund to the sender after expiry."
+  },
+  "contract-2": {
+    "hash": "801bb1a1e2",
+    "duration": 5.479909,
+    "text": "It's live on Arc mainnet, and keeps its own totals, so the stats page needs no backend."
+  },
+  "outro-0": {
+    "hash": "e4c13d76fe",
+    "duration": 3.715193,
+    "text": "KashLink. Send USDC as a link. Share it like cash."
+  }
+}

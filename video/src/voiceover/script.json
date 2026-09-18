@@ -1,0 +1,102 @@
+{
+  "hook": [
+    {
+      "at": 0.4,
+      "text": "KashLink sends USDC as a link. No address, no account, no gas. Live on Arc mainnet."
+    }
+  ],
+  "problem": [
+    {
+      "at": 0.3,
+      "text": "Every cash-link product has the same problem."
+    },
+    {
+      "at": 2.0,
+      "text": "The link is a fresh address. It holds the money, but has no gas to move it."
+    },
+    {
+      "at": 7.8,
+      "text": "So you bolt on a relayer, a hot wallet, meta-transactions, and an API. Our Polygon version needed all four."
+    },
+    {
+      "at": 14.5,
+      "text": "Arc makes every one of them unnecessary."
+    }
+  ],
+  "arc": [
+    {
+      "at": 0.3,
+      "text": "On Arc, USDC is the gas."
+    },
+    {
+      "at": 2.3,
+      "text": "The sender funds the link once: the amount, a one percent fee, and one cent per slot."
+    },
+    {
+      "at": 8.8,
+      "text": "The contract drops that cent on the link's own address. And that cent is the gas for the claim."
+    },
+    {
+      "at": 15.3,
+      "text": "The recipient signs one plain transaction with the key in the link. The chain just accepts it."
+    },
+    {
+      "at": 21.7,
+      "text": "No relayer. No second token. No wallet to install first."
+    }
+  ],
+  "demo": [
+    {
+      "at": 0.6,
+      "text": "Fund it once. Pick USDC or E-U-R-C, an amount, and who: one person, a link each, or an open drop."
+    },
+    {
+      "at": 8.6,
+      "text": "One transaction funds everything: the money, the fee, and a cent of claim gas per person."
+    },
+    {
+      "at": 16.2,
+      "text": "The key rides in the URL and never touches a server. Share it by chat, or hold up the QR code."
+    }
+  ],
+  "claim": [
+    {
+      "at": 0.5,
+      "text": "For the recipient, the link arrives like any message. Nothing to install."
+    },
+    {
+      "at": 5.2,
+      "text": "No wallet? Face ID creates a passkey wallet on the spot, and the claim goes straight into it."
+    },
+    {
+      "at": 12.4,
+      "text": "One plain transaction, paid from the cent on the link. Instant finality: received a block later."
+    }
+  ],
+  "features": [
+    {
+      "at": 0.4,
+      "text": "Cash links. A link each. Open drops. Notes and QR codes. Returns. Passkey wallets. E-U-R-C. And live stats."
+    }
+  ],
+  "contract": [
+    {
+      "at": 0.4,
+      "text": "About 260 lines of Solidity, 39 Foundry tests, no proxy, no pause. The app never holds the money."
+    },
+    {
+      "at": 8.9,
+      "text": "The only ways out of escrow are a claim with the link key, or a refund to the sender after expiry."
+    },
+    {
+      "at": 15.6,
+      "text": "It's live on Arc mainnet, and keeps its own totals, so the stats page needs no backend."
+    }
+  ],
+  "outro": [
+    {
+      "at": 0.8,
+      "text": "KashLink. Send USDC as a link. Share it like cash."
+    }
+  ]
+}
