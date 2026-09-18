@@ -45,13 +45,14 @@ stats page is a handful of `view` calls.
 | Step | Tx |
 |---|---|
 | Deploy | [`0x229fa32c…cb29`](https://explorer.arc.io/tx/0x229fa32c19ad2291dc8aa52a5959bace6881c1c0147cc12fd5ff4254ba69cb29) |
-| Create a $1 link | `TODO` |
-| Claim it to a second address | `TODO` |
-| Create a 3-person drop, claim two slots | `TODO` |
-| Refund the remainder after expiry | `TODO` |
-| Create and claim a €1 EURC link | `TODO` |
+| Create a $0.10 USDC link | [`0x8ebc7f6d…486e`](https://explorer.arc.io/tx/0x8ebc7f6d7642cfcc69e09f43b84bac032f79f4d57c8285567983f94e252d486e) |
+| Claim it | [`0x989d36bf…eebc`](https://explorer.arc.io/tx/0x989d36bfdf015ab9910683d4de955f95799d21299d56d7eb8c0f5e74cf56eebc) |
+| Create a €0.10 EURC link | [`0x41d15c46…bae0`](https://explorer.arc.io/tx/0x41d15c46f83a8421d9d0e151f437af1437a297cef9ef76a27d8d3a07184bbae0) |
+| Claim it to a second address | [`0xc008a40b…2669`](https://explorer.arc.io/tx/0xc008a40b4b8d799b0d44d6dbf9536d76d551e47b9dcbf2f57c3da56d38242669) |
+| Create and claim a $0.20 USDC link | [`0xb34da65c…8d4a`](https://explorer.arc.io/tx/0xb34da65c8982a55a57650e47e3d32c302cabffbdc53963b8e818e442f8e18d4a) / [`0xc1fd458c…8a61`](https://explorer.arc.io/tx/0xc1fd458c7581ae04bc80a1b8bfa80bb41a212ae546cd19b08c62494a0bc98a61) |
 
-Testnet equivalents for every step are in [`contracts/deployments.md`](../contracts/deployments.md).
+Drops, a-link-each batches and refunds are proven on testnet with the identical bytecode — see
+[`contracts/deployments.md`](../contracts/deployments.md).
 
 ## Demo
 
@@ -66,7 +67,7 @@ passkey wallet → received), features, contract credibility, links. `cd video &
 
 ## Checklist against the programme rules
 
-- [x] Deployed and working on Arc mainnet `TODO after Phase C`
+- [x] Deployed and working on Arc mainnet
 - [x] Public repo
 - [x] Description says what it does and what it uses Arc for
 - [ ] Builder profile linked

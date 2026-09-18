@@ -107,4 +107,17 @@ default script sender, see the note in `script/Deploy.s.sol`) and is abandoned.
 | Fees | 1 % (100 bps), no floor |
 | Deployed | 2026-09-17, 1,743,731 gas ≈ 0.035 USDC |
 
-Proof transactions: _pending smoke test_
+Proof transactions (from the live app, sender `0xCF6864D109724621CB94486FF2859977ab7EfA5f`):
+
+| Step | Tx |
+|---|---|
+| `create` a $0.10 USDC link | [`0x8ebc7f6d…486e`](https://explorer.arc.io/tx/0x8ebc7f6d7642cfcc69e09f43b84bac032f79f4d57c8285567983f94e252d486e) |
+| `claim` it | [`0x989d36bf…eebc`](https://explorer.arc.io/tx/0x989d36bfdf015ab9910683d4de955f95799d21299d56d7eb8c0f5e74cf56eebc) |
+| `create` a €0.10 EURC link (approve + create, stipend in USDC) | [`0x41d15c46…bae0`](https://explorer.arc.io/tx/0x41d15c46f83a8421d9d0e151f437af1437a297cef9ef76a27d8d3a07184bbae0) |
+| `claim` it to a second address | [`0xc008a40b…2669`](https://explorer.arc.io/tx/0xc008a40b4b8d799b0d44d6dbf9536d76d551e47b9dcbf2f57c3da56d38242669) |
+| `create` a $0.20 USDC link | [`0xb34da65c…8d4a`](https://explorer.arc.io/tx/0xb34da65c8982a55a57650e47e3d32c302cabffbdc53963b8e818e442f8e18d4a) |
+| `claim` it | [`0xc1fd458c…8a61`](https://explorer.arc.io/tx/0xc1fd458c7581ae04bc80a1b8bfa80bb41a212ae546cd19b08c62494a0bc98a61) |
+
+After these, `counters()` reads `(3 links, 0 drops, 3 claims, 0 refunds)`, `totals(USDC)` `(0.30, 0.30, 0)`,
+`totals(EURC)` `(0.10, 0.10, 0)` and the escrow holds nothing. Drops, batches and refunds are proven
+on testnet (above) with the identical bytecode.
