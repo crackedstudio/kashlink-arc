@@ -1,10 +1,12 @@
 import { createWalletClient, custom, type EIP1193Provider, type Hex } from 'viem'
 import { addChainParams, CHAIN, fees, rpc } from './arc'
+import { crackpayErrorMessage } from './crackpay'
 
 /**
  * The sender's wallet: whichever EVM wallet is installed in the browser — MetaMask, Rabby, Coinbase
  * Wallet, and so on — discovered through EIP-6963, with `window.ethereum` as the fallback for
- * wallets that predate it. A passkey wallet (passkey.ts) can stand in for one; both are `Connected`.
+ * wallets that predate it. A passkey wallet (passkey.ts) and the CrackPay account (crackpay.ts) can
+ * each stand in for one; all three are `Connected`.
  *
  * Claiming never comes through here. A KashLink is claimed with its own key, so a recipient needs
  * an address to receive at and nothing more; connecting a wallet on the claim screen is only a
@@ -55,12 +57,16 @@ export interface Connected {
   address: Hex
   /** The wallet's own icon (EIP-6963), for a browser wallet that announced one. */
   icon?: string
-  /** True for the passkey wallet, which has no extension to disconnect or switch. */
-  passkey: boolean
+  /**
+   * Which of the three senders this is. `passkey` has no extension to disconnect or switch;
+   * `crackpay` is the host wallet of a Mini App frame, so it can be neither chosen nor dropped.
+   */
+  kind: 'browser' | 'passkey' | 'crackpay'
   /**
    * Sends `calls` in order and resolves with the last transaction's hash once every call is final.
    * A browser wallet prompts once per call (`onPrompt` fires before each); a passkey wallet batches
-   * them into a single operation and a single prompt.
+   * them into a single operation and a single prompt; CrackPay prompts per call and returns a hash
+   * that is already final.
    */
   send: (calls: Call[], onPrompt?: (index: number) => void) => Promise<Hex>
 }
@@ -98,7 +104,7 @@ function browserWallet(wallet: DiscoveredWallet, address: Hex): Connected {
     name: wallet.name,
     address,
     icon: wallet.icon || undefined,
-    passkey: false,
+    kind: 'browser',
     async send(calls, onPrompt) {
       let hash: Hex = '0x'
       for (const [i, call] of calls.entries()) {
@@ -153,6 +159,9 @@ export function isInsufficientFunds(error: unknown): boolean {
  */
 export function errorMessage(error: unknown, token = 'USDC'): string {
   if (isUserRejection(error)) return 'Request cancelled.'
+  // CrackPay answers with EIP-1193 codes of its own, which say more than its message text does.
+  const fromCrackPay = crackpayErrorMessage(error)
+  if (fromCrackPay) return fromCrackPay
   const text = errorText(error)
   // ERC-4337 codes: AA21 is the account failing to prefund its gas, AA13 the deployment failing —
   // for a fresh passkey wallet that is the same thing, no USDC to pay with.

@@ -153,7 +153,7 @@ export function asSender(wallet: PasskeyWallet): Connected {
   return {
     name: 'KashLink wallet',
     address: wallet.address,
-    passkey: true,
+    kind: 'passkey',
     async send(calls: Call[]) {
       const bundler = bundlerClient()
       let hash: Hex

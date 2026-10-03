@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { CHAIN, ESCROW_CONFIGURED, IS_MAINNET } from '../lib/arc'
+import type { CrackPayContext } from '../lib/crackpay'
 import { type Connected, discoverWallets, type DiscoveredWallet } from '../lib/wallet'
 import AccountCard from './AccountCard.vue'
 import Icon from './Icon.vue'
@@ -16,6 +17,8 @@ const props = defineProps<{
   expiredCount: number
   hasPasskey: boolean
   openingPasskey: boolean
+  /** Inside CrackPay the account arrives on its own: no sign-in, no passkey, no extension. */
+  crackpay: CrackPayContext
 }>()
 const emit = defineEmits<{ connect: [wallet: DiscoveredWallet], usePasskey: [], signInPasskey: [], disconnect: [], next: [], showLinks: [], stats: [], showWallet: [], refresh: [] }>()
 
@@ -58,13 +61,14 @@ function choose(wallet: DiscoveredWallet) {
     </div>
     <!-- Signed in: the account leads and the pitch goes; the guide and the button follow right under it. -->
     <template v-if="signedIn">
-      <AccountCard class="top" :name="wallet!.name" :address="wallet!.address" :passkey="wallet!.passkey" :icon="wallet!.icon" :usdc="usdcBalance" :eurc="eurcBalance">
-        <div class="actions">
-          <button v-if="wallet!.passkey" class="action" @click="emit('showWallet')">
+      <AccountCard class="top" :name="wallet!.name" :address="wallet!.address" :passkey="wallet!.kind === 'passkey'" :icon="wallet!.icon" :usdc="usdcBalance" :eurc="eurcBalance">
+        <!-- Nothing to switch or disconnect inside CrackPay: its account is the only one here. -->
+        <div v-if="!crackpay.account" class="actions">
+          <button v-if="wallet!.kind === 'passkey'" class="action" @click="emit('showWallet')">
             <Icon name="send" :size="16" /> Send &amp; receive
           </button>
           <button class="action" @click="emit('disconnect')">
-            <Icon name="switch" :size="16" /> {{ wallet!.passkey ? 'Switch wallet' : 'Disconnect' }}
+            <Icon name="switch" :size="16" /> {{ wallet!.kind === 'passkey' ? 'Switch wallet' : 'Disconnect' }}
           </button>
         </div>
       </AccountCard>
@@ -88,6 +92,13 @@ function choose(wallet: DiscoveredWallet) {
     <section v-if="!signedIn" class="signin">
     <p v-if="!ESCROW_CONFIGURED" class="error">
       This build has no escrow contract configured, so links cannot be created.
+    </p>
+    <!-- Framed by CrackPay, but unusable from in there: say so rather than offer a wallet that cannot appear. -->
+    <p v-else-if="crackpay.notice" class="error">
+      {{ crackpay.notice }}
+    </p>
+    <p v-else-if="crackpay.detecting" class="hint muted center">
+      <span class="spinner" /> Connecting to CrackPay…
     </p>
     <template v-else>
       <p v-if="walletError" class="error">
@@ -215,7 +226,7 @@ function choose(wallet: DiscoveredWallet) {
     <button v-else-if="linkCount" class="link-btn links" @click="emit('showLinks')">
       <Icon name="link" :size="18" /> Your KashLinks ({{ linkCount }})
     </button>
-    <button v-if="hasPasskey && !wallet?.passkey" class="link-btn links" @click="emit('showWallet')">
+    <button v-if="hasPasskey && wallet?.kind !== 'passkey' && !crackpay.framed" class="link-btn links" @click="emit('showWallet')">
       <Icon name="wallet" :size="18" /> Your KashLink wallet
     </button>
 

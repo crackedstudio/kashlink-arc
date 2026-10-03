@@ -9,5 +9,8 @@ export default defineConfig({
     // 5173 and 5190 belong to other projects on this machine; fail instead of silently picking a random port.
     port: 5191,
     strictPort: true,
+    // CrackPay is an HTTPS page and cannot frame an http:// dev server, so Developer-mode testing
+    // goes through a tunnel. Vite blocks unknown Host headers unless they are named here.
+    allowedHosts: ['.ngrok-free.dev', '.ngrok-free.app', '.ngrok.app', '.ngrok.io', '.trycloudflare.com'],
   },
 })

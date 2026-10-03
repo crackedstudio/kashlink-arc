@@ -21,6 +21,7 @@ chain where USDC is the gas token, a throwaway link can pay for its own claim.
 | **Returns** | anything unclaimed comes back to the sender after 1, 7 or 30 days — from any device |
 | **No wallet? No problem** | a recipient can create a passkey wallet on the spot (Circle Modular Wallets) and claim into it |
 | **Live stats** | `/stats` reads totals the contract keeps itself; no backend, no indexer |
+| **Runs inside CrackPay** | a [CrackPay](https://crackpay.vercel.app) Mini App: connected on load, gas sponsored, no sign-in — see [docs/crackpay.md](docs/crackpay.md) |
 
 ---
 
@@ -120,6 +121,7 @@ src/
     arc.ts                 chain config, public client, fee floor, explorer URLs
     tokens.ts              USDC (native) and EURC (ERC-20): formatting, balances
     wallet.ts              EIP-6963 wallet discovery, add/switch to Arc
+    crackpay.ts            the CrackPay Mini App host as a third kind of sender
     links.ts               link model: keys, URLs, notes, quotes, create / claim / refund, status
     passkey.ts             Circle Modular Wallets: passkey wallet for recipients (loaded on demand)
     stats.ts               the /stats page, from the contract's counters and totals
@@ -129,7 +131,9 @@ src/
     escrow-abi.ts          generated from contracts/out by `npm run abi`
   components/              one file per screen
 supabase/                  analytics table (append-only RLS) and dashboard queries
+crackpay-listing.json      what CrackPay reviews before listing the app
 docs/ARC_MIGRATION_PLAN.md the plan this was built from
+docs/crackpay.md           running inside CrackPay: what changes, testing, listing
 ```
 
 ## Development
@@ -165,6 +169,19 @@ All `VITE_` variables are baked in at build time. See [`.env.example`](.env.exam
 | `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Analytics. Unset ⇒ nothing is recorded. |
 | `VITE_CIRCLE_CLIENT_KEY` | Circle Console client key. Unset ⇒ the passkey-wallet option is hidden. |
 | `VITE_CIRCLE_SPONSOR_GAS` | `true` / `false`: Circle Gas Station pays passkey-wallet gas. Default: on for testnet, off for mainnet (needs a paymaster policy). |
+| `VITE_CRACKPAY_ORIGINS` | Extra CrackPay hosts to trust, comma-separated, for testing against a CrackPay you run yourself. The real one is trusted anyway. |
+
+## CrackPay
+
+KashLink also runs as a **Mini App inside [CrackPay](https://crackpay.vercel.app)**, the stablecoin
+wallet on Arc: it opens the app in a frame, hands it the signed-in account and sponsors the gas, so
+a CrackPay user funds a link without connecting anything. Recipients are unaffected — a link made in
+CrackPay is an ordinary KashLink that anyone opens in a browser.
+
+CrackPay is on Arc Testnet only, so that listing points at a testnet deployment of its own;
+`arc.kashlink.live` stays on mainnet. The whole of it — the adapter, what the frame takes away, how
+to test in Developer mode and how to get listed — is in **[docs/crackpay.md](docs/crackpay.md)**,
+and [`crackpay-listing.json`](crackpay-listing.json) is what gets submitted.
 
 ## Deployment
 
