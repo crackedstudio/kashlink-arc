@@ -10,6 +10,7 @@ import ReviewScreen from './components/ReviewScreen.vue'
 import StatsScreen from './components/StatsScreen.vue'
 import WalletSheet from './components/WalletSheet.vue'
 import { track } from './lib/analytics'
+import { crackpay, crackpayWallet } from './lib/crackpay'
 import { ESCROW_ADDRESS, ESCROW_CONFIGURED, gasReserve } from './lib/arc'
 import { formatUsdc } from './lib/format'
 import {
@@ -139,8 +140,12 @@ onMounted(() => {
   // screen. Skipped when opening someone else's link, where these are not ours to care about.
   if (screen.value !== 'claim' && links.value.length) refreshStatuses(links.value).catch(() => {})
   feeParams().then(p => (fees.value = p)).catch(() => {})
-  // The passkey wallet is the front door: if this device has one, it is signed in from the start.
-  if (screen.value !== 'claim' && hasPasskey.value && !wallet.value) usePasskey('open', true)
+  crackpay.then((host) => {
+    // Inside CrackPay its wallet is connected from the start, on every screen, with no picker.
+    if (host) connectWallet(host)
+    // Otherwise the passkey wallet is the front door: if this device has one, it is signed in from the start.
+    else if (screen.value !== 'claim' && hasPasskey.value && !wallet.value) usePasskey('open', true)
+  })
 })
 
 async function loadBalance() {
@@ -295,7 +300,7 @@ function finishClaim() {
   history.replaceState(null, '', location.pathname + location.search)
   claimLink.value = null
   screen.value = 'intro'
-  if (hasPasskey.value && !wallet.value) usePasskey('open', true)
+  if (!crackpayWallet.value && hasPasskey.value && !wallet.value) usePasskey('open', true)
 }
 </script>
 
@@ -304,7 +309,7 @@ function finishClaim() {
   <StatsScreen v-else-if="screen === 'stats'" @back="leaveStats" />
   <IntroScreen
     v-else-if="screen === 'intro'"
-    :wallet :connecting :wallet-error :usdc-balance :eurc-balance
+    :wallet :connecting="connecting || crackpayWallet === undefined" :wallet-error :usdc-balance :eurc-balance
     :link-count="links.length" :expired-count="expiredCount" :has-passkey="hasPasskey" :opening-passkey="openingPasskey"
     @connect="connectWallet" @use-passkey="usePasskey()" @sign-in-passkey="usePasskey('open')" @disconnect="disconnect" @next="startCreate" @show-links="showLinks = true" @stats="showStats" @show-wallet="showWallet = true" @refresh="loadBalance"
   />

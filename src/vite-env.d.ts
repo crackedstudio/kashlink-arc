@@ -12,4 +12,5 @@ interface ImportMetaEnv {
   readonly VITE_CIRCLE_CLIENT_KEY?: string
   readonly VITE_CIRCLE_CLIENT_URL?: string
   readonly VITE_CIRCLE_SPONSOR_GAS?: 'true' | 'false'
+  readonly VITE_CRACKPAY_ORIGINS?: string
 }
