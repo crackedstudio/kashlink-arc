@@ -10,8 +10,8 @@ import ReviewScreen from './components/ReviewScreen.vue'
 import StatsScreen from './components/StatsScreen.vue'
 import WalletSheet from './components/WalletSheet.vue'
 import { track } from './lib/analytics'
-import { crackpay, crackpayWallet } from './lib/crackpay'
 import { ESCROW_ADDRESS, ESCROW_CONFIGURED, gasReserve } from './lib/arc'
+import { context as crackpayContext, type CrackPay, detectCrackPay, maybeFramed } from './lib/crackpay'
 import { formatUsdc } from './lib/format'
 import {
   chainState, createLinks, EXPIRY_OPTIONS, feeParams, type FeeParams, isExpired, type LinkMode, newLink,
@@ -29,6 +29,14 @@ const screen = ref<Screen>(claimLink.value ? 'claim' : location.pathname.replace
 
 const wallet = ref<Connected | null>(connected())
 const walletError = ref<string | null>(null)
+/**
+ * Whether the app is running inside CrackPay, which lends it the user's account (crackpay.ts).
+ * The handshake is asynchronous, so while `detectingCrackPay` is true no sign-in option is offered:
+ * a Mini App must never show a connect button for a wallet it is already connected to.
+ */
+const found = ref<CrackPay>({ status: 'absent' })
+const detectingCrackPay = ref(maybeFramed())
+const crackpay = computed(() => crackpayContext(found.value, detectingCrackPay.value))
 const connecting = ref(false)
 /** Both balances are always read: USDC pays the stipends and gas whatever the link carries. */
 const usdcBalance = ref<bigint | null>(null)
@@ -93,9 +101,13 @@ function clearBalances() {
   eurcBalance.value = null
 }
 
-/** Drops the current account. A browser wallet is forgotten; the passkey wallet stays on the device. */
+/**
+ * Drops the current account. A browser wallet is forgotten; the passkey wallet stays on the device.
+ * The CrackPay account cannot be dropped — it is the wallet this app is running inside.
+ */
 function disconnect() {
-  if (wallet.value && !wallet.value.passkey) forgetBrowserWallet()
+  if (wallet.value?.kind === 'crackpay') return
+  if (wallet.value?.kind === 'browser') forgetBrowserWallet()
   wallet.value = null
   walletError.value = null
   clearBalances()
@@ -109,15 +121,35 @@ function openWallet() {
 const expiredCount = computed(() => links.value.filter(l => chainState[l.id] && isExpired(chainState[l.id])).length)
 const quote = computed(() => (fees.value ? quoteWith(fees.value, token.value, amount.value, people.value, mode.value) : null))
 
-watch(() => wallet.value?.passkey, async (passkey) => {
-  if (passkey === undefined) return
-  reserve.value = await gasReserve(passkey ? 'passkey' : 'wallet').catch(() => 0n)
+watch(() => wallet.value?.kind, async (kind) => {
+  if (kind === undefined) return
+  reserve.value = await gasReserve(kind).catch(() => 0n)
 }, { immediate: true })
 
+/** The passkey wallet is the front door in an ordinary tab: if this device has one, it is signed in. */
+function signInWithPasskey() {
+  if (screen.value !== 'claim' && hasPasskey.value && !wallet.value) usePasskey('open', true)
+}
+
 onMounted(() => {
+  // Inside CrackPay the account arrives on its own and there is no sign-in step; everywhere else
+  // `maybeFramed()` is false, so nothing is waited for.
+  if (detectingCrackPay.value) {
+    detectCrackPay().then((result) => {
+      found.value = result
+      detectingCrackPay.value = false
+      if (result.status !== 'connected') {
+        signInWithPasskey()
+        return
+      }
+      wallet.value = result.wallet
+      clearBalances()
+      loadBalance()
+    })
+  }
   // Someone with a passkey wallet will likely open it; fetch the SDK (a third of the app) while idle,
   // so the wallet is ready to send by the time they tap.
-  if (hasPasskey.value) {
+  if (hasPasskey.value && !detectingCrackPay.value) {
     const preload = () => import('./lib/passkey').catch(() => {})
     if ('requestIdleCallback' in window) requestIdleCallback(preload)
     else setTimeout(preload, 1500)
@@ -140,12 +172,7 @@ onMounted(() => {
   // screen. Skipped when opening someone else's link, where these are not ours to care about.
   if (screen.value !== 'claim' && links.value.length) refreshStatuses(links.value).catch(() => {})
   feeParams().then(p => (fees.value = p)).catch(() => {})
-  crackpay.then((host) => {
-    // Inside CrackPay its wallet is connected from the start, on every screen, with no picker.
-    if (host) connectWallet(host)
-    // Otherwise the passkey wallet is the front door: if this device has one, it is signed in from the start.
-    else if (screen.value !== 'claim' && hasPasskey.value && !wallet.value) usePasskey('open', true)
-  })
+  if (!detectingCrackPay.value) signInWithPasskey()
 })
 
 async function loadBalance() {
@@ -273,7 +300,7 @@ async function send() {
 function forgotPasskey() {
   showWallet.value = false
   hasPasskey.value = false
-  if (wallet.value?.passkey) disconnect()
+  if (wallet.value?.kind === 'passkey') disconnect()
 }
 
 function openLink(link: StoredLink) {
@@ -300,21 +327,26 @@ function finishClaim() {
   history.replaceState(null, '', location.pathname + location.search)
   claimLink.value = null
   screen.value = 'intro'
-  if (!crackpayWallet.value && hasPasskey.value && !wallet.value) usePasskey('open', true)
+  signInWithPasskey()
 }
 </script>
 
 <template>
-  <ClaimScreen v-if="screen === 'claim' && claimLink" :key="claimLink.key" :link-key="claimLink.key" :message="claimLink.message" @done="finishClaim" @open-wallet="openWallet" />
+  <ClaimScreen
+    v-if="screen === 'claim' && claimLink" :key="claimLink.key" :link-key="claimLink.key" :message="claimLink.message"
+    :crackpay
+    @done="finishClaim" @open-wallet="openWallet"
+  />
   <StatsScreen v-else-if="screen === 'stats'" @back="leaveStats" />
   <IntroScreen
     v-else-if="screen === 'intro'"
-    :wallet :connecting="connecting || crackpayWallet === undefined" :wallet-error :usdc-balance :eurc-balance
+    :wallet :connecting :wallet-error :usdc-balance :eurc-balance
     :link-count="links.length" :expired-count="expiredCount" :has-passkey="hasPasskey" :opening-passkey="openingPasskey"
+    :crackpay
     @connect="connectWallet" @use-passkey="usePasskey()" @sign-in-passkey="usePasskey('open')" @disconnect="disconnect" @next="startCreate" @show-links="showLinks = true" @stats="showStats" @show-wallet="showWallet = true" @refresh="loadBalance"
   />
   <AmountScreen
-    v-else-if="screen === 'amount'" :token :balance :usdc-balance :fees :people :mode :expiry-seconds="expirySeconds" :gas-reserve="reserve" :passkey="!!wallet?.passkey"
+    v-else-if="screen === 'amount'" :token :balance :usdc-balance :fees :people :mode :expiry-seconds="expirySeconds" :gas-reserve="reserve" :passkey="wallet?.kind === 'passkey'"
     @back="screen = 'intro'" @retry="loadBalance" @update:token="selectToken" @continue="onAmount"
   />
   <ReviewScreen

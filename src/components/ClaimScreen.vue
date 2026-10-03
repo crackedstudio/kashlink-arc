@@ -3,21 +3,25 @@ import { type Hex, isAddress } from 'viem'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { track } from '../lib/analytics'
 import { CHAIN, ESCROW_CONFIGURED, txUrl } from '../lib/arc'
+import type { CrackPayContext } from '../lib/crackpay'
 import { shortAddress } from '../lib/format'
 import { claimLink, hasClaimed, linkGasBalance, linkIdOf, type OnChainLink, readLink } from '../lib/links'
 import { hasSavedPasskey } from '../lib/passkey-cache'
 import { formatAmount } from '../lib/tokens'
-import { crackpay, crackpayWallet } from '../lib/crackpay'
 import { connect, discoverWallets, errorMessage } from '../lib/wallet'
 import CopyAddress from './CopyAddress.vue'
 import Icon from './Icon.vue'
 import Logo from './Logo.vue'
 
-const props = defineProps<{ linkKey: Hex, message?: string }>()
+const props = defineProps<{ linkKey: Hex, message?: string, crackpay: CrackPayContext }>()
 const emit = defineEmits<{ done: [], openWallet: [] }>()
 
-/** Passkey wallets need a Circle client key; without one the option simply isn't offered. */
-const PASSKEYS = !!import.meta.env.VITE_CIRCLE_CLIENT_KEY
+/**
+ * Passkey wallets need a Circle client key; without one the option simply isn't offered. Inside a
+ * frame they cannot be offered either: a cross-origin frame gets no WebAuthn and no extension, so
+ * the only payout addresses on offer there are the CrackPay account and a pasted one.
+ */
+const PASSKEYS = !!import.meta.env.VITE_CIRCLE_CLIENT_KEY && !props.crackpay.framed
 
 /**
  * loading    reading the link from the contract
@@ -42,6 +46,8 @@ const connecting = ref(false)
 const manual = ref(false)
 /** Set when the payout went to the passkey wallet, and whether that wallet was made just now. */
 const toPasskey = ref(false)
+/** Set when the payout went to the CrackPay account this app is running inside. */
+const toCrackPay = ref(false)
 const newWallet = ref(false)
 /** A passkey wallet already lives on this device; claim into it rather than making a second one. */
 const hasPasskey = hasSavedPasskey()
@@ -127,9 +133,7 @@ onUnmounted(() => clearInterval(pollTimer))
  * the address — it signs nothing, since the claim is signed by the link's own key.
  */
 async function claimWithWallet() {
-  // Inside CrackPay, the CrackPay account is where the money goes.
-  const host = await crackpay
-  const wallets = host ? [host] : discoverWallets()
+  const wallets = discoverWallets()
   if (!wallets.length) {
     manual.value = true
     error.value = 'No wallet found in this browser. Paste the address you want it sent to instead.'
@@ -148,6 +152,14 @@ async function claimWithWallet() {
   finally {
     connecting.value = false
   }
+  await claim()
+}
+
+/** The one tap a CrackPay user needs: the account is already known, so claim straight into it. */
+async function claimToCrackPay() {
+  if (!props.crackpay.account) return
+  to.value = props.crackpay.account
+  toCrackPay.value = true
   await claim()
 }
 
@@ -239,6 +251,9 @@ async function claim() {
         The prepaid gas for this link has been used up. Ask the sender to wait for it to expire,
         take it back, and send a new one.
       </p>
+      <p v-else-if="state === 'success' && toCrackPay" class="status muted">
+        {{ amount }} in {{ token?.symbol }} is in your CrackPay balance. Close this app to see it.
+      </p>
       <p v-else-if="state === 'success' && toPasskey" class="status muted">
         {{ amount }} in {{ token?.symbol }} is in your {{ newWallet ? 'new ' : '' }}KashLink wallet, <CopyAddress :address="to.trim()" />.
         Your passkey controls it; open it any time from the home screen.
@@ -272,6 +287,9 @@ async function claim() {
           Any address on Arc. Nothing to sign, no gas — the link pays for itself.
         </p>
       </template>
+      <p v-else-if="crackpay.account" class="hint muted center">
+        Nothing to sign and no gas to pay — the link covers it. The {{ token?.symbol }} goes straight into your CrackPay balance.
+      </p>
       <p v-else class="hint muted center">
         Nothing to sign and no gas to pay — the link covers it. Your wallet only tells us where to send the {{ token?.symbol }}.
       </p>
@@ -286,15 +304,16 @@ async function claim() {
           Claim {{ amount }}
         </template>
       </button>
-      <button v-else-if="crackpayWallet !== null" class="btn btn-primary" :disabled="crackpayWallet === undefined || connecting || state === 'claiming'" @click="claimWithWallet">
+      <!-- Still shaking hands with CrackPay: wait rather than offer a wallet that is about to appear. -->
+      <p v-else-if="crackpay.detecting" class="hint muted center">
+        <span class="spinner" /> Connecting to CrackPay…
+      </p>
+      <button v-else-if="crackpay.account" class="btn btn-primary" :disabled="state === 'claiming'" @click="claimToCrackPay">
         <template v-if="state === 'claiming'">
           <span class="spinner" /> Claiming…
         </template>
-        <template v-else-if="crackpayWallet === undefined || connecting">
-          <span class="spinner" /> Connecting…
-        </template>
         <template v-else>
-          Claim {{ amount }} to CrackPay
+          <Icon name="wallet" :size="20" /> Claim {{ amount }} into CrackPay
         </template>
       </button>
       <template v-else-if="PASSKEYS">
@@ -325,7 +344,7 @@ async function claim() {
           </template>
         </button>
       </template>
-      <button v-else class="btn btn-primary" :disabled="connecting || state === 'claiming'" @click="claimWithWallet">
+      <button v-else-if="!crackpay.framed" class="btn btn-primary" :disabled="connecting || state === 'claiming'" @click="claimWithWallet">
         <template v-if="state === 'claiming'">
           <span class="spinner" /> Claiming…
         </template>
@@ -336,8 +355,12 @@ async function claim() {
           <Icon name="wallet" :size="20" /> Connect wallet & claim {{ amount }}
         </template>
       </button>
-      <button class="link-btn switch" :disabled="state === 'claiming' || creating" @click="manual = !manual; error = null">
-        {{ manual ? 'Use a wallet instead' : PASSKEYS ? 'Or paste an address' : 'No wallet? Paste an address instead' }}
+      <!-- Framed with no CrackPay account to claim into: there is no wallet in here, only an address. -->
+      <button v-else class="btn btn-primary" @click="manual = true">
+        Choose where to send it
+      </button>
+      <button v-if="!crackpay.detecting" class="link-btn switch" :disabled="state === 'claiming' || creating" @click="manual = !manual; error = null">
+        {{ manual ? (crackpay.account ? 'Claim into CrackPay instead' : 'Use a wallet instead') : PASSKEYS ? 'Or paste an address' : 'Or paste an address instead' }}
       </button>
     </template>
 

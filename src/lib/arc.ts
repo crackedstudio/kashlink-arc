@@ -82,10 +82,12 @@ export const PASSKEY_GAS_SPONSORED = import.meta.env.VITE_CIRCLE_SPONSOR_GAS ? i
  * is different: sponsored, it pays nothing; unsponsored, the bundler wants a *prefund* for the whole
  * gas limit of the user operation before it runs — about 0.16 USDC for the first one, which also
  * deploys the account — and refunds what is unused afterwards. The reserve is that prefund.
+ * Inside CrackPay there is nothing to keep back: CrackPay sponsors every transaction it sends.
  */
-const GAS_LIMIT = { wallet: 300_000n, passkey: 8_000_000n } as const
+const GAS_LIMIT = { browser: 300_000n, passkey: 8_000_000n, crackpay: 0n } as const
 
 export async function gasReserve(kind: keyof typeof GAS_LIMIT): Promise<bigint> {
+  if (kind === 'crackpay') return 0n
   if (kind === 'passkey' && PASSKEY_GAS_SPONSORED) return 0n
   const { maxFeePerGas } = await fees()
   return GAS_LIMIT[kind] * maxFeePerGas

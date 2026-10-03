@@ -57,14 +57,17 @@ async function copy() {
 }
 
 async function share() {
-  if (navigator.share) {
-    try {
+  try {
+    if (navigator.share) {
       await navigator.share({ title: 'KashLink', text: shareText.value, url: url.value })
+      return
     }
-    catch {
-      // user closed the share sheet
-    }
-    return
+  }
+  catch (e) {
+    // AbortError is the user closing the share sheet, and that is that. Anything else means the
+    // sheet never opened — a cross-origin frame such as CrackPay is not allowed to call it, though
+    // the method is there — so fall through and copy, which a frame can do.
+    if ((e as Error).name === 'AbortError') return
   }
   await copy()
 }

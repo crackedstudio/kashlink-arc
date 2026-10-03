@@ -1,0 +1,33 @@
+{
+  "name": "KashLink",
+  "tagline": "Send USDC or EURC as a link. Whoever opens it keeps the money — no address, no account, no gas.",
+  "publisher": "Cracked Studios",
+  "category": "finance",
+  "url": "https://testnet.kashlink.live",
+  "icon": "https://testnet.kashlink.live/icon-512.png",
+  "supportUrl": "mailto:support@crackedstudios.xyz",
+  "termsUrl": "https://testnet.kashlink.live/terms",
+  "privacyUrl": "https://testnet.kashlink.live/terms#privacy",
+  "network": "arc-testnet",
+  "contracts": [
+    {
+      "address": "0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62",
+      "name": "KashLinkEscrow",
+      "purpose": "Escrows the money behind a link. The app calls create or createMany to fund one link per person, paying a 1% fee plus a cent of native USDC per link so each claim pays its own gas; refund and refundMany return anything unclaimed after expiry. Claims use the link's own key, not the app's user.",
+      "explorerUrl": "https://explorer.testnet.arc.io/address/0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62",
+      "sampleTransactions": [
+        "https://explorer.testnet.arc.io/tx/0xe9e0deedd8c8537ce0f1b495c895b98ea388fe8f73d71f4a2a3feb930bddef91",
+        "https://explorer.testnet.arc.io/tx/0x3218636350156cd564c4c2a9af9279095bc457b0e6b8b1bea738a3e96bf45aea",
+        "https://explorer.testnet.arc.io/tx/0x8ee2db32741672d7781042be30335ec87963203cdb9f43e3861af014cac8cd04"
+      ]
+    }
+  ],
+  "tokenApprovals": [
+    "EURC"
+  ],
+  "origins": [
+    "https://rpc.testnet.arc.io",
+    "https://fonts.googleapis.com",
+    "https://fonts.gstatic.com"
+  ]
+}
