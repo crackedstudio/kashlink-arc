@@ -52,6 +52,7 @@ beforeEach(() => {
   framed = true
   sent = []
   trusted = []
+  vi.unstubAllEnvs()
 })
 
 describe('detecting CrackPay', () => {
@@ -81,7 +82,16 @@ describe('detecting CrackPay', () => {
     expect(await detectCrackPay()).toEqual({ status: 'absent' })
   })
 
-  it('trusts the real CrackPay and nothing else by default', async () => {
+  it('trusts the real CrackPay, and a local one while developing the two together', async () => {
+    const { detectCrackPay } = await load()
+    await detectCrackPay()
+    expect(trusted).toEqual(['https://crackpay.vercel.app', 'http://localhost:3000'])
+  })
+
+  it('trusts the real CrackPay and nothing else in a built app', async () => {
+    // The localhost entry is a convenience for `npm run dev`; whatever is on this list is trusted
+    // as the wallet, so a deployed KashLink must carry nothing but CrackPay's own origin.
+    vi.stubEnv('DEV', false)
     const { detectCrackPay } = await load()
     await detectCrackPay()
     expect(trusted).toEqual(['https://crackpay.vercel.app'])

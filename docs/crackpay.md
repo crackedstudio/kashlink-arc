@@ -112,11 +112,12 @@ A test app may call any contract; a listed one may call only what its listing na
 the escrow in `crackpay-listing.json`, or a flow that works now will stop working once the app is
 listed.
 
-To work against a CrackPay running somewhere other than `crackpay.vercel.app` — your own copy on
-`http://localhost:3000` — name it:
+`npm run dev` already trusts a CrackPay on `http://localhost:3000`, so developing the two side by
+side needs no configuration. To work against one somewhere else — another port, or a machine on the
+network — name it:
 
 ```
-VITE_CRACKPAY_ORIGINS=http://localhost:3000
+VITE_CRACKPAY_ORIGINS=http://192.168.1.20:3000
 ```
 
 Whatever is on that list is trusted as the wallet, so nothing belongs on it that is not yours. The

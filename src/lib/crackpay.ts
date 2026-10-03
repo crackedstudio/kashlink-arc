@@ -34,13 +34,15 @@ export const CRACKPAY_URL = 'https://crackpay.vercel.app'
 
 /**
  * Which CrackPay to trust. The SDK's own list is the real one; `VITE_CRACKPAY_ORIGINS` adds to it,
- * comma-separated, for working against a CrackPay served from somewhere else — `http://localhost:3000`
- * while developing CrackPay itself. Whatever is on this list is trusted as the wallet, so nothing
- * belongs on it that is not yours.
+ * comma-separated, for working against a CrackPay served from somewhere else. A dev build also
+ * trusts a CrackPay on `http://localhost:3000`, so the two can be developed together without any
+ * configuration. Whatever is on this list is trusted as the wallet, so nothing belongs on it that
+ * is not yours — which is why the localhost entry is dev-only and never reaches a deployed app.
  */
 const HOST_ORIGINS: readonly string[] = [
   ...CRACKPAY_ORIGINS,
   ...(import.meta.env.VITE_CRACKPAY_ORIGINS ?? '').split(',').map(origin => origin.trim()).filter(Boolean),
+  ...(import.meta.env.DEV ? ['http://localhost:3000'] : []),
 ]
 
 /**
