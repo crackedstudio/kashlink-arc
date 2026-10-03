@@ -7,6 +7,7 @@ import { shortAddress } from '../lib/format'
 import { claimLink, hasClaimed, linkGasBalance, linkIdOf, type OnChainLink, readLink } from '../lib/links'
 import { hasSavedPasskey } from '../lib/passkey-cache'
 import { formatAmount } from '../lib/tokens'
+import { crackpay, crackpayWallet } from '../lib/crackpay'
 import { connect, discoverWallets, errorMessage } from '../lib/wallet'
 import CopyAddress from './CopyAddress.vue'
 import Icon from './Icon.vue'
@@ -126,7 +127,9 @@ onUnmounted(() => clearInterval(pollTimer))
  * the address — it signs nothing, since the claim is signed by the link's own key.
  */
 async function claimWithWallet() {
-  const wallets = discoverWallets()
+  // Inside CrackPay, the CrackPay account is where the money goes.
+  const host = await crackpay
+  const wallets = host ? [host] : discoverWallets()
   if (!wallets.length) {
     manual.value = true
     error.value = 'No wallet found in this browser. Paste the address you want it sent to instead.'
@@ -281,6 +284,17 @@ async function claim() {
         </template>
         <template v-else>
           Claim {{ amount }}
+        </template>
+      </button>
+      <button v-else-if="crackpayWallet !== null" class="btn btn-primary" :disabled="crackpayWallet === undefined || connecting || state === 'claiming'" @click="claimWithWallet">
+        <template v-if="state === 'claiming'">
+          <span class="spinner" /> Claiming…
+        </template>
+        <template v-else-if="crackpayWallet === undefined || connecting">
+          <span class="spinner" /> Connecting…
+        </template>
+        <template v-else>
+          Claim {{ amount }} to CrackPay
         </template>
       </button>
       <template v-else-if="PASSKEYS">
