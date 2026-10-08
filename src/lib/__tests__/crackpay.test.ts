@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { CRACKPAY_ORIGINS } from '@crackpay/miniapp-sdk'
 import { CHAIN } from '../arc'
 
 /**
@@ -85,7 +86,8 @@ describe('detecting CrackPay', () => {
   it('trusts the real CrackPay, and a local one while developing the two together', async () => {
     const { detectCrackPay } = await load()
     await detectCrackPay()
-    expect(trusted).toEqual(['https://crackpay.vercel.app', 'http://localhost:3000'])
+    expect(trusted).toEqual([...CRACKPAY_ORIGINS, 'http://localhost:3000'])
+    expect(trusted).toContain('https://www.crackpay.xyz')
   })
 
   it('trusts the real CrackPay and nothing else in a built app', async () => {
@@ -94,7 +96,7 @@ describe('detecting CrackPay', () => {
     vi.stubEnv('DEV', false)
     const { detectCrackPay } = await load()
     await detectCrackPay()
-    expect(trusted).toEqual(['https://crackpay.vercel.app'])
+    expect(trusted).toEqual([...CRACKPAY_ORIGINS])
   })
 
   it('asks only once per page load', async () => {

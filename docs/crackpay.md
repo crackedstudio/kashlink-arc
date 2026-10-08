@@ -1,6 +1,6 @@
 # KashLink inside CrackPay
 
-[CrackPay](https://crackpay.vercel.app) is a USD stablecoin wallet on Arc that opens **Mini Apps**
+[CrackPay](https://www.crackpay.xyz) is a USD stablecoin wallet on Arc that opens **Mini Apps**
 in a frame and lends them the signed-in account. KashLink runs as one: a CrackPay user opens
 KashLink from the Apps page, funds a link out of their CrackPay balance, and anyone they send that
 link to claims it the ordinary way — in a browser, with no wallet at all.
@@ -10,7 +10,7 @@ user sends; KashLink's links pay their own claim gas out of the stipend the escr
 inside CrackPay nobody — sender or recipient — ever holds a gas token, and the sender never signs
 anything but the deposit.
 
-- Developer documentation: <https://crackpay.vercel.app/developers>
+- Developer documentation: <https://www.crackpay.xyz/developers>
 - The SDK this uses: [`@crackpay/miniapp-sdk`](https://www.npmjs.com/package/@crackpay/miniapp-sdk)
 - Listing file: [`crackpay-listing.json`](../crackpay-listing.json)
 
@@ -61,15 +61,23 @@ different set from the ones in an ordinary tab on the same device. A sender's li
 chain (`linksOf`), so they can still be watched and refunded from either place — but only the device
 that made a link holds the key that re-shares it.
 
-## Networks: why this needs its own deployment
+## Networks: one listing per network
 
-CrackPay runs on **Arc Testnet (5042002)** and refuses every other chain; its provider answers
-`wallet_switchEthereumChain` for anything else with `4902`. KashLink's production build defaults to
-**mainnet**. One build cannot be both, and a link made on one network is meaningless on the other —
-the URL a sender shares has to point back at the app that can read it.
+Each CrackPay runs on one Arc network and refuses every other chain; its provider answers
+`wallet_switchEthereumChain` for anything else with `4902`. CrackPay at
+[www.crackpay.xyz](https://www.crackpay.xyz) runs on **Arc mainnet (5042)**. A link made on one
+network is meaningless on the other, so the URL a sender shares has to point back at the app that
+can read it.
 
-So the CrackPay listing names a **testnet deployment of its own**, and `arc.kashlink.live` stays
-exactly as it is.
+So CrackPay lists KashLink once per network, each pointing at the deployment for that network:
+
+| CrackPay | KashLink listing | Escrow |
+|---|---|---|
+| Arc mainnet (www.crackpay.xyz) | `https://arc.kashlink.live/` | `0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62` |
+| Arc Testnet | `https://testnet.kashlink.live/` | `0x4d6c05Fe69ECCB3fDd882D4e915d77ff29159C62` |
+
+The production build (`arc.kashlink.live`) is already a mainnet build and needs nothing extra. A
+testnet deployment for a testnet CrackPay sets:
 
 ```
 VITE_ARC_NETWORK=testnet
@@ -82,11 +90,11 @@ Leave `VITE_ESCROW_LEGACY` unset: an escrow that is not in the listing cannot be
 that offers to refund links on an old one would get `4100`. Leave `VITE_CIRCLE_CLIENT_KEY` unset
 too — the passkey option is hidden in the frame regardless, and it is the only thing that key is for.
 
-If the build does point somewhere CrackPay cannot reach, the app says so on the sign-in screen
+If a build is opened inside a CrackPay on the other network, the app says so on the sign-in screen
 instead of failing at the first transaction:
 
-> This KashLink is on Arc, and CrackPay only works on Arc Testnet — so it cannot send from in here.
-> Open KashLink in a browser tab instead.
+> This KashLink is on Arc Testnet, and this CrackPay is on another network — so it cannot send from
+> in here. Open KashLink in a browser tab instead.
 
 ## Testing it
 
@@ -102,7 +110,8 @@ off the Apps page without any other symptom than a blank frame.
    already in `vite.config.ts`'s `server.allowedHosts`.
 2. In CrackPay: **Settings** → tap **Version** seven times → **Developer settings** → **Developer
    mode** on → paste the URL under **Load test page** → **Load**.
-3. Fund the CrackPay account from [faucet.circle.com](https://faucet.circle.com) (Arc Testnet).
+3. Fund the CrackPay account. On www.crackpay.xyz that is real USDC on Arc mainnet, so test with
+   small amounts; a testnet CrackPay takes test USDC from [faucet.circle.com](https://faucet.circle.com).
 
 What to look for: the account card is filled in on load with no connect button, the USDC figure
 matches CrackPay's own, **Send** raises CrackPay's confirmation for the exact total, and cancelling
@@ -126,7 +135,7 @@ real CrackPay stays trusted either way.
 ## Getting listed
 
 CrackPay's admins list apps; a developer submits [`crackpay-listing.json`](../crackpay-listing.json)
-at <https://crackpay.vercel.app/developers/submit> with an email address they can reply to.
+at <https://www.crackpay.xyz/developers/submit> with an email address they can reply to.
 
 The listing records the app's URL, the contracts it may call, and the tokens it may ask the user to
 approve. KashLink's is short, because the sender only ever calls one contract:
