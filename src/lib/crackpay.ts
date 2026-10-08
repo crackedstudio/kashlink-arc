@@ -6,7 +6,7 @@ import type { Connected } from './wallet'
 /**
  * KashLink as a CrackPay Mini App.
  *
- * CrackPay (https://crackpay.vercel.app) is a stablecoin wallet on Arc that opens Mini Apps in a
+ * CrackPay (https://www.crackpay.xyz) is a stablecoin wallet on Arc that opens Mini Apps in a
  * frame and lends them the user's account. It is a third kind of sender alongside a browser wallet
  * and the passkey wallet (wallet.ts, passkey.ts), and the thinnest of the three: the account is
  * already connected when the page loads, CrackPay sponsors the gas, and it shows the confirmation
@@ -19,18 +19,16 @@ import type { Connected } from './wallet'
  * - **No signing, no batching, no gas fields.** `eth_sendTransaction` is the only write, one call
  *   at a time, and `gas`/`maxFeePerGas`/`nonce` are ignored — so the requests go straight to the
  *   provider instead of through viem, which would estimate gas and fetch a nonce for nothing.
- * - **Testnet only.** CrackPay offers Arc Testnet and refuses every other chain, so a mainnet
- *   build of KashLink cannot work inside it; `wrong-network` says so in plain words instead of
- *   failing at the first transaction. See docs/crackpay.md.
+ * - **One network per CrackPay.** Each CrackPay runs on one Arc network (www.crackpay.xyz is
+ *   mainnet) and refuses every other chain, so this build only works inside a CrackPay on the same
+ *   network; `wrong-network` says so in plain words instead of failing at the first transaction.
+ *   See docs/crackpay.md.
  * - **Inside a frame** there are no passkeys and no camera, and storage is partitioned away from
  *   the same app in an ordinary tab. The passkey wallet and the QR scanner are therefore not
  *   offered here; claiming into the CrackPay account is.
  */
 
-/** The only chain CrackPay offers. `wallet_switchEthereumChain` rejects anything else. */
-export const CRACKPAY_CHAIN_ID = 5042002
-
-export const CRACKPAY_URL = 'https://crackpay.vercel.app'
+export const CRACKPAY_URL = 'https://www.crackpay.xyz'
 
 /**
  * Which CrackPay to trust. The SDK's own list is the real one; `VITE_CRACKPAY_ORIGINS` adds to it,
@@ -83,7 +81,7 @@ export function context(found: CrackPay, detecting: boolean): CrackPayContext {
     detecting,
     account: found.status === 'connected' ? found.wallet.address : null,
     notice: found.status === 'wrong-network'
-      ? `This KashLink is on ${CHAIN.name}, and CrackPay only works on Arc Testnet — so it cannot send from in here. Open KashLink in a browser tab instead.`
+      ? `This KashLink is on ${CHAIN.name}, and this CrackPay is on another network — so it cannot send from in here. Open KashLink in a browser tab instead.`
       : null,
   }
 }

@@ -21,7 +21,7 @@ chain where USDC is the gas token, a throwaway link can pay for its own claim.
 | **Returns** | anything unclaimed comes back to the sender after 1, 7 or 30 days — from any device |
 | **No wallet? No problem** | a recipient can create a passkey wallet on the spot (Circle Modular Wallets) and claim into it |
 | **Live stats** | `/stats` reads totals the contract keeps itself; no backend, no indexer |
-| **Runs inside CrackPay** | a [CrackPay](https://crackpay.vercel.app) Mini App: connected on load, gas sponsored, no sign-in — see [docs/crackpay.md](docs/crackpay.md) |
+| **Runs inside CrackPay** | a [CrackPay](https://www.crackpay.xyz) Mini App: connected on load, gas sponsored, no sign-in — see [docs/crackpay.md](docs/crackpay.md) |
 
 ---
 
@@ -173,7 +173,7 @@ All `VITE_` variables are baked in at build time. See [`.env.example`](.env.exam
 
 ## CrackPay
 
-KashLink also runs as a **Mini App inside [CrackPay](https://crackpay.vercel.app)**, the stablecoin
+KashLink also runs as a **Mini App inside [CrackPay](https://www.crackpay.xyz)**, the stablecoin
 wallet on Arc: it opens the app in a frame, hands it the signed-in account and sponsors the gas, so
 a CrackPay user funds a link without connecting anything. Recipients are unaffected — a link made in
 CrackPay is an ordinary KashLink that anyone opens in a browser.
